@@ -1,0 +1,1 @@
+int rlen(int *input, int len, int *result);

@@ -136,14 +136,14 @@ class RandomResizedCrop(object):
                 return image, mask
             else:
                 if mask is not None:
-                    mask = cv2.resize(mask, self.size)
+                    mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
                 return cv2.resize(image, self.size), mask
 
         i, j, h, w = self.get_params(image, self.scale, self.ratio)
         cropped = image[i:i + h, j:j + w, :]
         if mask is not None:
             crop_mask = mask[i:i+h, j:j+w]
-            mask = cv2.resize(crop_mask, self.size)
+            mask = cv2.resize(crop_mask, self.size, interpolation=cv2.INTER_NEAREST)
         return cv2.resize(cropped, self.size), mask
 
 
@@ -175,7 +175,9 @@ class Compose(object):
 
 class Rotate(object):
     def __call__(self, img, mask=None):
-        angle = np.random.randint(0, 361)
+        angle = np.random.choice([0, -90, 90], 1)[0]
+        delta = np.random.randint(-20, 20)
+        angle += delta
         rows, cols = img.shape[0:2]
         M = cv2.getRotationMatrix2D((cols / 2, rows / 2), angle, 1.0)
         img = cv2.warpAffine(img, M, (cols, rows), borderValue=[0, 0, 0])
@@ -184,8 +186,61 @@ class Rotate(object):
         return img, mask
 
 
+class RandomRotate(object):
+
+    def __init__(self):
+
+        self.origin = lambda img: img
+        self.rot90 = lambda img: cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        self.rot180 = lambda img: cv2.rotate(img, cv2.ROTATE_180)
+        self.rot270 = lambda img: cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        self.rot_code = {
+            0: self.origin,
+            1: self.rot90,
+            2: self.rot180,
+            3: self.rot270
+        }
+
+    def __call__(self, image, labels):
+
+        if len(image.shape) == 3:
+
+            code = np.random.randint(4)
+            image = np.ascontiguousarray(self.rot_code[code](image))
+            labels = np.ascontiguousarray(self.rot_code[code](labels))
+            return image, labels
+
+        elif len(image.shape) == 4:
+
+            for i in range(image.shape[0]):
+                code = np.random.randint(2)
+                image[i] = np.ascontiguousarray(self.rot_code[code](image[i]))
+                labels[i] = np.ascontiguousarray(self.rot_code[code](labels[i]))
+
+            return image, labels
+
+
+class RandomRotateAlpha(object):
+    def __init__(self, degree):
+        self.degree = degree
+
+    def __call__(self, img, mask):
+
+        if np.random.randint(2):
+            return img, mask
+
+        rotate_degree = np.random.random() * 2 * self.degree - self.degree
+        img = Image.fromarray(img.astype(np.uint8))
+        img = img.rotate(rotate_degree, Image.BILINEAR)
+        mask = Image.fromarray(mask.astype(np.uint8))
+        mask = mask.rotate(rotate_degree, Image.NEAREST)
+        return np.array(img), np.array(mask)
+
+
 class AdaptiveHist(object):
-    def __call__(self, im_cv):
+    def __call__(self, im_cv, mask):
+        im_cv = np.round(im_cv).astype(np.uint8)
         im = im_cv
         equalized_img = None
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -198,7 +253,7 @@ class AdaptiveHist(object):
         else:
             equalized_img = clahe.apply(im_cv)
         # cv2.imwrite('tmp.jpg', equalized_img)
-        return equalized_img
+        return equalized_img.astype(np.float32), mask
 
 class Normalize(object):
     def __init__(self, mean, std=None):
@@ -229,7 +284,7 @@ class Resize(object):
         image = cv2.resize(image, (self.size,
                                    self.size))
         if mask is not None:
-            mask = cv2.resize(mask, (self.size, self.size))
+            mask = cv2.resize(mask, (self.size, self.size), interpolation=cv2.INTER_NEAREST)
         return image, mask
 
 
@@ -241,14 +296,16 @@ class Augmentation(object):
         self.mean = mean
         self.std = std
         self.augmentation = Compose([
-            # Resize(size),
+            Resize(size),
             RandomBrightness(),
             RandomContrast(),
             RandomHorizontalFlip(),
-            RandomVerticalFlip(),
+            # RandomVerticalFlip(),
+            # RandomRotate(),
+            # RandomRotateAlpha(45),
             Padding(),
             RandomResizedCrop(self.size, self.scale, self.ratio),
-            Rotate(),
+            # Rotate(),
             NormalizeMean(mean)
         ])
 

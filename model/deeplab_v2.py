@@ -3,8 +3,25 @@ import math
 import torch.utils.model_zoo as model_zoo
 import torch
 import numpy as np
+import torch.nn.init as init
 affine_par = True
 
+
+def xavier(param):
+    init.xavier_uniform(param)
+
+
+def he(param):
+    init.kaiming_uniform(param)
+
+
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        xavier(m.weight.data)
+        if m.bias is not None:
+            m.bias.data.zero_()
+    elif isinstance(m, nn.Linear):
+        xavier(m.weight.data)
 
 def outS(i):
     i = int(i)
@@ -58,19 +75,19 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False) # change
         self.bn1 = nn.BatchNorm2d(planes,affine = affine_par)
-        for i in self.bn1.parameters():
-            i.requires_grad = False
+        # for i in self.bn1.parameters():
+        #     i.requires_grad = False
 
         padding = dilation
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, # change
                                padding=padding, bias=False, dilation = dilation)
         self.bn2 = nn.BatchNorm2d(planes,affine = affine_par)
-        for i in self.bn2.parameters():
-            i.requires_grad = False
+        # for i in self.bn2.parameters():
+        #     i.requires_grad = False
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4, affine = affine_par)
-        for i in self.bn3.parameters():
-            i.requires_grad = False
+        # for i in self.bn3.parameters():
+        #     i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -210,8 +227,8 @@ class ResNet(nn.Module):
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine = affine_par)
-        for i in self.bn1.parameters():
-            i.requires_grad = False
+        # for i in self.bn1.parameters():
+        #     i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True) # change
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -242,8 +259,8 @@ class ResNet(nn.Module):
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes * block.expansion,affine = affine_par))
-        for i in downsample._modules['1'].parameters():
-            i.requires_grad = False
+        # for i in downsample._modules['1'].parameters():
+        #     i.requires_grad = False
         layers = []
         layers.append(block(self.inplanes, planes, stride,dilation=dilation, downsample=downsample))
         self.inplanes = planes * block.expansion
@@ -290,8 +307,19 @@ class MS_Deeplab(nn.Module):
         out_max = torch.max(torch.max(output, output75), output5)
         return [output, output75, output5, out_max]
 
-def Res_Ms_Deeplab(num_classes=21):
+def Res_Ms_Deeplab(num_classes=21, pretrained=True):
     model = MS_Deeplab(Bottleneck, num_classes)
+    pretrained_path = 'data/pretrained_model/MS_DeepLab_resnet_pretrained_COCO_init.pth'
+    if pretrained:
+        saved_state_dict = torch.load(pretrained_path)
+        new_params = model.Scale.state_dict().copy()
+        for i in saved_state_dict:
+            # Scale.layer5.conv2d_list.3.weight
+            i_parts = i.split('.')
+            # print i_parts
+            if num_classes == 21 or not i_parts[1] == 'layer5':
+                new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+        model.Scale.load_state_dict(new_params)
     return model
 
 def Res_Deeplab(num_classes=21, is_refine=False, pretrained=True):
@@ -300,6 +328,7 @@ def Res_Deeplab(num_classes=21, is_refine=False, pretrained=True):
     else:
         pretrained_path = 'data/pretrained_model/MS_DeepLab_resnet_pretrained_COCO_init.pth'
         model = ResNet(Bottleneck,[3, 4, 23, 3], num_classes)
+        # model = ResNet(Bottleneck,[3, 4, 6, 3], num_classes)
         if pretrained:
             saved_state_dict = torch.load(pretrained_path)
             new_params = model.state_dict().copy()
@@ -310,5 +339,7 @@ def Res_Deeplab(num_classes=21, is_refine=False, pretrained=True):
                 if num_classes == 21 or not i_parts[1] == 'layer5':
                     new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
             model.load_state_dict(new_params)
+        else:
+            model.apply(weights_init)
     return model
 

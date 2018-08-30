@@ -2,6 +2,9 @@ from PIL import Image
 import numpy as np
 from skimage.transform import resize
 import pickle
+import torch
+from torch.autograd import Variable
+
 
 def save_img(img, path):
     if isinstance(img, np.ndarray):
@@ -18,6 +21,18 @@ def downsample(img, img_size_ori, img_size_target):
     if img_size_ori == img_size_target:
         return img
     return resize(img, (img_size_ori, img_size_ori), mode='constant', preserve_range=True)
+
+def one_hot_embedding(labels, num_classes):
+    '''Embedding labels to one-hot form.
+    :param labels: (Variable - torch.LongTensor) class labels, sized [N,].
+    :param num_classes: (int) number of classes.
+    :return (Variable - torch.FloatTensor) encoded labels, sized [N, #classes].
+    '''
+    label = labels.data.long()
+    eye = label.new(num_classes, num_classes)
+    eye.copy_(torch.eye(num_classes))
+    target_onehot = eye[label.view(-1)]  # [N, #classes]
+    return Variable(target_onehot)
 
 def make_submission(names, preds, path):
     """

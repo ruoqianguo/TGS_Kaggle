@@ -1,19 +1,29 @@
 import torch.nn as nn
+import torch
+import torch.nn.functional as F
+from utils.func import one_hot_embedding
+from torch.nn import BCELoss, CrossEntropyLoss
 
 
 class DiceLoss(nn.Module):
-    def __init__(self, smooth=1.0):
+
+    def __init__(self, num_classes, smooth=1):
         super(DiceLoss, self).__init__()
+        self.num_classes = num_classes
         self.smooth = smooth
 
     def forward(self, input, target):
-        num = target.size(0)
-        m1 = input.view(num, -1)
-        m2 = target.view(num, -1)
+        """
+        :param input: torch.FloatTensor, [bs, num_classes, H, W]
+        :param target: torch.LongTensor, [bs, H, W]
+        :return: dice loss
+        """
+        input = input.permute(0, 2, 3, 1).contiguous().view(-1, self.num_classes)
+        input = input.float()  # [bs x H x W, num_classes]
+        target = target.view(-1)
+        target = one_hot_embedding(target, self.num_classes)  # [bs x H x W, num_classes]
+        target = target.float()
 
-        intersection = (m1 * m2)
-
-        score = 2. * (intersection.sum(1) + self.smooth) / (m1.sum(1) + m2.sum(1) + self.smooth)
-        score = 1 - score.sum() / num
-
-        return score
+        intersect = input * target
+        score = (2. * intersect.sum() + self.smooth) / (input.pow(2).sum() + target.pow(2).sum() + self.smooth)
+        return 1 - score

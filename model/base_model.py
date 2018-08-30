@@ -10,10 +10,10 @@ import torch.nn.init as init
 import torch.backends.cudnn as cudnn
 from model.unet import UNet
 from model.unet_models import UNetResNet34, UNetResNet50, UNetResNet101, UNetResNet152, UNet11, UNetVGG16
-from model.deeplab_v2 import Res_Deeplab
+from model.deeplab_v2 import Res_Deeplab, Res_Ms_Deeplab
 from model.loss import DiceLoss
 from utils.metrics import accuracy, mIoU, intersection_over_union_thresholds, intersection_over_union
-
+from skimage.transform import resize
 
 def xavier(param):
     init.xavier_uniform(param)
@@ -40,13 +40,20 @@ def get_1x_lr_params_NOscale(model):
     any batchnorm parameter
     """
     b = []
-
-    b.append(model.conv1)
-    b.append(model.bn1)
-    b.append(model.layer1)
-    b.append(model.layer2)
-    b.append(model.layer3)
-    b.append(model.layer4)
+    try:
+        b.append(model.conv1)
+        b.append(model.bn1)
+        b.append(model.layer1)
+        b.append(model.layer2)
+        b.append(model.layer3)
+        b.append(model.layer4)
+    except AttributeError:
+        b.append(model.Scale.conv1)
+        b.append(model.Scale.bn1)
+        b.append(model.Scale.layer1)
+        b.append(model.Scale.layer2)
+        b.append(model.Scale.layer3)
+        b.append(model.Scale.layer4)
 
     for i in range(len(b)):
         for j in b[i].modules():
@@ -63,7 +70,10 @@ def get_10x_lr_params(model):
     which does the classification of pixel into classes
     """
     b = []
-    b.append(model.layer5.parameters())
+    try:
+        b.append(model.layer5.parameters())
+    except AttributeError:
+        b.append(model.Scale.layer5.parameters())
 
     for j in range(len(b)):
         for i in b[j]:
@@ -102,7 +112,9 @@ class BaseModel:
         elif args.model_name == 'UNetVGG16':
             self.net = UNetVGG16(args.num_classes, pretrained=True, dropout_2d=0.0, is_deconv=True)
         elif args.model_name == 'deeplab_v2':
-            self.net = Res_Deeplab(args.num_classes, pretrained=True)
+            self.net = Res_Deeplab(args.num_classes, pretrained=args.pretrained)
+        elif args.model_name == 'ms_deeplab_v2':
+            self.net = Res_Ms_Deeplab(args.num_classes, pretrained=args.pretrained)
 
         self.interp = nn.Upsample(size=args.size, mode='bilinear')
 
@@ -110,14 +122,14 @@ class BaseModel:
         self.lr_current = args.lr
         self.cuda = args.cuda
         self.phase = args.phase
-        if args.loss == 'BCELoss':
+        if args.loss == 'CELoss':
             self.criterion = nn.CrossEntropyLoss(size_average=True)
         elif args.loss == 'DiceLoss':
-            self.criterion = DiceLoss()
+            self.criterion = DiceLoss(num_classes=args.num_classes)
         else:
             raise RuntimeError('must define loss')
 
-        if args.model_name == 'deeplab_v2':
+        if 'deeplab_v2' in args.model_name:
             self.optimizer = optim.SGD([{'params': get_1x_lr_params_NOscale(self.net), 'lr': args.lr},
                                    {'params': get_10x_lr_params(self.net), 'lr': 10 * args.lr}],
                                   lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -127,9 +139,31 @@ class BaseModel:
         self.iters = 0
 
     def init_model(self):
+        if self.args.loss == 'DiceLoss':
+            best_model = 'weights/salt_deeplab_crossentropy_v8/25_deeplab_v2_.pth'
+            saved_state_dict = torch.load(best_model, map_location=lambda storage, loc: storage)
+            new_params = self.net.state_dict().copy()
+            for i in saved_state_dict:
+                # Scale.layer5.conv2d_list.3.weight
+                i_parts = i.split('.')
+                # print i_parts
+                if not (i_parts[0] == 'layer5'):
+                    new_params[i] = saved_state_dict[i]
+            self.net.load_state_dict(new_params)
+
         if self.args.resume_model:
+            saved_state_dict = torch.load(self.args.resume_model, map_location=lambda storage, loc: storage)
+            new_params = self.net.state_dict().copy()
+            for i in saved_state_dict:
+                # Scale.layer5.conv2d_list.3.weight
+                i_parts = i.split('.')
+                # print i_parts
+                if not (i_parts[0] == 'layer5'):
+                    new_params[i] = saved_state_dict[i]
+            self.net.load_state_dict(new_params)
+
             print('Resuming training, image net loading {}...'.format(self.args.resume_model))
-            self.load_weights(self.net, self.args.resume_model)
+            # self.load_weights(self.net, self.args.resume_model)
 
         if self.args.cuda:
             self.net = self.net.cuda()
@@ -178,8 +212,10 @@ class BaseModel:
 
             # cls forward
             out = self.net(image)
-            out = out.gt(0.5)
-            output.extend(out.data.cpu().numpy())
+            if out.size(2) != 128:
+                out = self.interp(out)
+            out = F.softmax(out)
+            output.extend([resize(pred[1].data.cpu().numpy(), (101,101)) for pred in out])
         return np.array(output)
 
     def tta(self, dataloaders):
@@ -217,10 +253,13 @@ class BaseModel:
 
             if out.size(2) != label_image.size(2):
                 out = self.interp(out)
+            out = F.softmax(out)
+            pred.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
 
-            pred.extend(out.data.cpu().numpy())
+            # pred.extend(out.data.cpu().numpy())
             true.extend(label_image.data.cpu().numpy())
-        pred_all = np.argmax(np.array(pred), 1)
+        # pred_all = np.argmax(np.array(pred), 1)
+        pred_all = np.array(pred) > 0.5
         true_all = np.array(true).astype(np.int)
         # new_iou = intersection_over_union(true_all, pred_all)
         # new_iou_t = intersection_over_union_thresholds(true_all, pred_all)
@@ -250,29 +289,45 @@ class BaseModel:
                 image = Variable(image, volatile=(not train))
                 label_image = Variable(mask, volatile=(not train))
             # cls forward
-            sig_out = self.net(image)
+            out = self.net(image)
 
-            # if self.args.model_name == 'deeplab_v2':
-            #     sig_out = F.sigmoid(sig_out)
+            if isinstance(out, list):
+                output, output75, output5, out_max = out
+                if output.size(2) != label_image.size(2):
+                    output = self.interp(output)
+                    output75 = self.interp(output75)
+                    output5 = self.interp(output5)
+                    out_max = self.interp(out_max)
+                loss_output = self.criterion(output, label_image)
+                loss_output75 = self.criterion(output75, label_image)
+                loss_output5 = self.criterion(output5, label_image)
+                loss_out_max = self.criterion(out_max, label_image)
+                loss = loss_output + loss_output75 + loss_output5 + loss_out_max
+                label_image_np = label_image.data.cpu().numpy()
+                sig_out_np = out_max.data.cpu().numpy()
+                acc = accuracy(label_image_np, np.argmax(sig_out_np, 1))
 
-            if sig_out.size(2) != label_image.size(2):
-                sig_out = self.interp(sig_out)
-            # print('image', image)
-            # print('sig_out', sig_out)
+                self.pred[flag].extend(sig_out_np)
+                self.true[flag].extend(label_image_np)
 
-            loss = self.criterion(sig_out, label_image)
-            label_image_np = label_image.data.cpu().numpy()
-            sig_out_np = sig_out.data.cpu().numpy()
-            acc = accuracy(label_image_np, np.argmax(sig_out_np, 1))
-            # score = np.mean(get_score(label_image_np.transpose(0, 2, 3, 1),
-            #                           (sig_out_np.transpose(0, 2, 3, 1)) > 0.5))
+                self.losses[flag].append(loss.data[0])
+                self.acces[flag].append(acc)
 
-            self.pred[flag].extend(sig_out_np)
-            self.true[flag].extend(label_image_np)
 
-            self.losses[flag].append(loss.data[0])
-            self.acces[flag].append(acc)
-            # self.scores[flag].append(score)
+            else:
+                if out.size(-1) != label_image.size(-1):
+                    out = self.interp(out)
+
+                loss = self.criterion(out, label_image)
+                label_image_np = label_image.data.cpu().numpy()
+                sig_out_np = out.data.cpu().numpy()
+                acc = accuracy(label_image_np, np.argmax(sig_out_np, 1))
+
+                self.pred[flag].extend(sig_out_np)
+                self.true[flag].extend(label_image_np)
+
+                self.losses[flag].append(loss.data[0])
+                self.acces[flag].append(acc)
 
             if train:
                 self.optimizer.zero_grad()

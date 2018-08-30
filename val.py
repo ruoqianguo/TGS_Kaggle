@@ -20,7 +20,7 @@ if __name__ == '__main__':
     val = pickle.load(open(os.path.join(args.data_root, 'val.pkl'), 'rb'))
     image_root = os.path.join(args.data_root, 'train', 'images')
 
-    val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None))
+    val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None), use_depth=args.use_depth, original_mask=True)
 
     val_dataloader = data.DataLoader(val_dataset, batch_size=args.batch_size, num_workers=args.num_workers,
                                      pin_memory=True,
@@ -47,11 +47,9 @@ if __name__ == '__main__':
 
         for i, d in tqdm(enumerate(val['names'])):
             name = d
-            tmp = np.transpose(pred[i], [1, 2, 0])
-            tmp = tmp.reshape([tmp.shape[0], -1])
+            tmp = pred[i]
             save_img(tmp > 0.5, os.path.join(OUT_1, name + '_pred.jpg'))
-            tmp = np.transpose(true[i], [1, 2, 0])
-            tmp = tmp.reshape([tmp.shape[0], -1])
+            tmp = true[i]
             save_img(tmp, os.path.join(OUT_2, name + '_true.jpg'))
 
 

@@ -27,9 +27,9 @@ class SegOptions(object):
 
         # train opt
         self.parser.add_argument('--model_name', default='UNet', type=str,
-                                 choices=['UNet', 'UNetResNet34', 'UNet11', 'UNetVGG16', 'UNetResNet152', 'deeplab_v2'], help='image_model')
-        self.parser.add_argument('--loss', default='BCELoss', type=str,
-                                 choices=['BCELoss', 'DiceLoss'], help='image_model')
+                                 choices=['UNet', 'UNetResNet34', 'UNet11', 'UNetVGG16', 'UNetResNet152', 'deeplab_v2' ,'ms_deeplab_v2'], help='image_model')
+        self.parser.add_argument('--loss', default='CELoss', type=str,
+                                 choices=['DiceLoss', 'CELoss'], help='image_model')
         self.parser.add_argument('--epochs', default=30, type=int, help='Number of training iterations')
         self.parser.add_argument('--stepvalues', default=[18, 25], nargs='+', type=int, help='# of iter to change lr')
         self.parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
@@ -40,6 +40,7 @@ class SegOptions(object):
         self.parser.add_argument('--save_freq', default=5, type=int, help='save weights every # epochs')
         self.parser.add_argument('--size', default=128, type=int, help='resize image size')
         self.parser.add_argument('--vis', help='whether vis', action='store_true')
+        self.parser.add_argument('--use_depth', help='whether use depth', action='store_true')
 
         # fixed args
         self.parser.add_argument('--num_classes', default=2, type=int, help='# lesion + bg')
