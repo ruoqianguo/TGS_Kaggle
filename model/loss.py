@@ -27,3 +27,23 @@ class DiceLoss(nn.Module):
         intersect = input * target
         score = (2. * intersect.sum() + self.smooth) / (input.pow(2).sum() + target.pow(2).sum() + self.smooth)
         return 1 - score
+
+class MixLoss(nn.Module):
+
+    def __init__(self, num_classes, smooth=1, weights=[1.0, 1.0]):
+        super(MixLoss, self).__init__()
+        self.num_classes = num_classes
+        self.smooth = smooth
+        self.diceloss = DiceLoss(num_classes, smooth)
+        self.celoss = CrossEntropyLoss()
+        self.weights = weights
+
+    def forward(self, input, target):
+        """
+        :param input: torch.FloatTensor, [bs, num_classes, H, W]
+        :param target: torch.LongTensor, [bs, H, W]
+        :return: dice loss
+        """
+        diceloss = self.diceloss(input, target)
+        celoss = self.celoss(input, target)
+        return celoss * self.weights[0] + diceloss * self.weights[1]

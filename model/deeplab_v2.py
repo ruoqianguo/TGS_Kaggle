@@ -295,7 +295,7 @@ class MS_Deeplab(nn.Module):
         input_size = x.size()[2]
 
         self.interp1 = nn.Upsample(size=(int(input_size*0.75)+1, int(input_size*0.75)+1), mode='bilinear')
-        self.interp2 = nn.Upsample(size=(int(input_size*0.5)+1, int(input_size*0.5)+1), mode='bilinear')
+        self.interp2 = nn.Upsample(size=(int(input_size*1.25)+1, int(input_size*1.25)+1), mode='bilinear')
         self.interp3 = nn.Upsample(size=(output_size, output_size), mode='bilinear')
 
         x75 = self.interp1(x)
@@ -338,6 +338,28 @@ def Res_Deeplab(num_classes=21, is_refine=False, pretrained=True):
                 # print i_parts
                 if num_classes == 21 or not i_parts[1] == 'layer5':
                     new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+            model.load_state_dict(new_params)
+        else:
+            model.apply(weights_init)
+    return model
+
+
+def Res50_Deeplab(num_classes=21, is_refine=False, pretrained=True):
+    if is_refine:
+        model = ResNet_Refine(Bottleneck,[3, 4, 23, 3], num_classes)
+    else:
+        pretrained_path = 'data/pretrained_model/VOC12_scenes_240_2644.pth'
+        # model = ResNet(Bottleneck,[3, 4, 23, 3], num_classes)
+        model = ResNet(Bottleneck,[3, 4, 6, 3], num_classes)
+        if pretrained:
+            saved_state_dict = torch.load(pretrained_path)['model']
+            new_params = model.state_dict().copy()
+            for i in saved_state_dict:
+                # layer5.conv2d_list.3.weight
+                i_parts = i.split('.')
+                # print i_parts
+                if num_classes == 21 or not i_parts[0] == 'layer5':
+                    new_params[i] = saved_state_dict[i]
             model.load_state_dict(new_params)
         else:
             model.apply(weights_init)

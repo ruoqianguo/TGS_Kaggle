@@ -10,8 +10,8 @@ import torch.nn.init as init
 import torch.backends.cudnn as cudnn
 from model.unet import UNet
 from model.unet_models import UNetResNet34, UNetResNet50, UNetResNet101, UNetResNet152, UNet11, UNetVGG16
-from model.deeplab_v2 import Res_Deeplab, Res_Ms_Deeplab
-from model.loss import DiceLoss
+from model.deeplab_v2 import Res_Deeplab, Res_Ms_Deeplab, Res50_Deeplab
+from model.loss import DiceLoss, MixLoss
 from utils.metrics import accuracy, mIoU, intersection_over_union_thresholds, intersection_over_union
 from skimage.transform import resize
 
@@ -111,10 +111,16 @@ class BaseModel:
             self.net = UNet11(args.num_classes, pretrained=True)
         elif args.model_name == 'UNetVGG16':
             self.net = UNetVGG16(args.num_classes, pretrained=True, dropout_2d=0.0, is_deconv=True)
+        elif args.model_name == 'deeplab50_v2':
+            if args.ms:
+                raise NotImplemented
+            else:
+                self.net = Res50_Deeplab(args.num_classes, pretrained=args.pretrained)
         elif args.model_name == 'deeplab_v2':
-            self.net = Res_Deeplab(args.num_classes, pretrained=args.pretrained)
-        elif args.model_name == 'ms_deeplab_v2':
-            self.net = Res_Ms_Deeplab(args.num_classes, pretrained=args.pretrained)
+            if args.ms:
+                self.net = Res_Ms_Deeplab(args.num_classes, pretrained=args.pretrained)
+            else:
+                self.net = Res_Deeplab(args.num_classes, pretrained=args.pretrained)
 
         self.interp = nn.Upsample(size=args.size, mode='bilinear')
 
@@ -126,10 +132,12 @@ class BaseModel:
             self.criterion = nn.CrossEntropyLoss(size_average=True)
         elif args.loss == 'DiceLoss':
             self.criterion = DiceLoss(num_classes=args.num_classes)
+        elif args.loss == 'MixLoss':
+            self.criterion = MixLoss(args.num_classes, weights=args.loss_weights)
         else:
             raise RuntimeError('must define loss')
 
-        if 'deeplab_v2' in args.model_name:
+        if 'deeplab' in args.model_name:
             self.optimizer = optim.SGD([{'params': get_1x_lr_params_NOscale(self.net), 'lr': args.lr},
                                    {'params': get_10x_lr_params(self.net), 'lr': 10 * args.lr}],
                                   lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -139,28 +147,26 @@ class BaseModel:
         self.iters = 0
 
     def init_model(self):
-        if self.args.loss == 'DiceLoss':
-            best_model = 'weights/salt_deeplab_crossentropy_v8/25_deeplab_v2_.pth'
-            saved_state_dict = torch.load(best_model, map_location=lambda storage, loc: storage)
-            new_params = self.net.state_dict().copy()
-            for i in saved_state_dict:
-                # Scale.layer5.conv2d_list.3.weight
-                i_parts = i.split('.')
-                # print i_parts
-                if not (i_parts[0] == 'layer5'):
-                    new_params[i] = saved_state_dict[i]
-            self.net.load_state_dict(new_params)
-
         if self.args.resume_model:
             saved_state_dict = torch.load(self.args.resume_model, map_location=lambda storage, loc: storage)
-            new_params = self.net.state_dict().copy()
-            for i in saved_state_dict:
-                # Scale.layer5.conv2d_list.3.weight
-                i_parts = i.split('.')
-                # print i_parts
-                if not (i_parts[0] == 'layer5'):
-                    new_params[i] = saved_state_dict[i]
-            self.net.load_state_dict(new_params)
+            if self.args.ms:
+                new_params = self.net.Scale.state_dict().copy()
+                for i in saved_state_dict:
+                    # Scale.layer5.conv2d_list.3.weight
+                    i_parts = i.split('.')
+                    # print i_parts
+                    if not (i_parts[0] == 'layer5'):
+                        new_params[i] = saved_state_dict[i]
+                self.net.Scale.load_state_dict(new_params)
+            else:
+                new_params = self.net.state_dict().copy()
+                for i in saved_state_dict:
+                    # Scale.layer5.conv2d_list.3.weight
+                    i_parts = i.split('.')
+                    # print i_parts
+                    if not (i_parts[0] == 'layer5'):
+                        new_params[i] = saved_state_dict[i]
+                self.net.load_state_dict(new_params)
 
             print('Resuming training, image net loading {}...'.format(self.args.resume_model))
             # self.load_weights(self.net, self.args.resume_model)
@@ -196,7 +202,10 @@ class BaseModel:
     def load_trained_model(self):
         path = os.path.join(self.args.save_folder, self.args.exp_name, self.args.trained_model)
         print('eval cls, image net loading {}...'.format(path))
-        self.load_weights(self.net, path)
+        if self.args.ms:
+            self.load_weights(self.net.Scale, path)
+        else:
+            self.load_weights(self.net, path)
 
     def eval(self, dataloader):
         assert self.phase == 'test', "Command arg phase should be 'test'. "
@@ -212,8 +221,13 @@ class BaseModel:
 
             # cls forward
             out = self.net(image)
-            if out.size(2) != 128:
-                out = self.interp(out)
+            if isinstance(out, list):
+                _, _, _, out_max = out
+                if out_max.size(2) != image.size(2):
+                    out = self.interp(out_max)
+            else:
+                if out.size(2) != 128:
+                    out = self.interp(out)
             out = F.softmax(out)
             output.extend([resize(pred[1].data.cpu().numpy(), (101,101)) for pred in out])
         return np.array(output)
@@ -250,9 +264,13 @@ class BaseModel:
 
             # cls forward
             out = self.net(image)
-
-            if out.size(2) != label_image.size(2):
-                out = self.interp(out)
+            if isinstance(out, list):
+                output, output75, output5, out_max = out
+                if out_max.size(2) != label_image.size(2):
+                    out = self.interp(out_max)
+            else:
+                if out.size(2) != label_image.size(2):
+                    out = self.interp(out)
             out = F.softmax(out)
             pred.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
 
@@ -380,5 +398,8 @@ class BaseModel:
                 self.run_epoch(dataloader_val, writer, val_epoch, train=False, metrics=True)
                 val_epoch += 1
 
-                self.save_network(self.net, self.args.model_name, epoch=val_epoch, )
+                if self.args.ms:
+                    self.save_network(self.net.Scale, self.args.model_name, epoch=val_epoch, )
+                else:
+                    self.save_network(self.net, self.args.model_name, epoch=val_epoch, )
                 print('saving in val_iteration {}'.format(val_epoch))
