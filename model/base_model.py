@@ -118,7 +118,7 @@ class BaseModel:
                 self.net = Res50_Deeplab(args.num_classes, pretrained=args.pretrained)
         elif args.model_name == 'deeplab_v2':
             if args.ms:
-                self.net = Res_Ms_Deeplab(args.num_classes, pretrained=args.pretrained)
+                self.net = Res_Ms_Deeplab(args.num_classes, pretrained=args.pretrained, scales=args.ms_scales)
             else:
                 self.net = Res_Deeplab(args.num_classes, pretrained=args.pretrained)
 
@@ -222,7 +222,7 @@ class BaseModel:
             # cls forward
             out = self.net(image)
             if isinstance(out, list):
-                _, _, _, out_max = out
+                out_max = out[-1]
                 if out_max.size(2) != image.size(2):
                     out = self.interp(out_max)
             else:
@@ -265,7 +265,7 @@ class BaseModel:
             # cls forward
             out = self.net(image)
             if isinstance(out, list):
-                output, output75, output5, out_max = out
+                out_max = out[-1]
                 if out_max.size(2) != label_image.size(2):
                     out = self.interp(out_max)
             else:
@@ -310,17 +310,14 @@ class BaseModel:
             out = self.net(image)
 
             if isinstance(out, list):
-                output, output75, output5, out_max = out
-                if output.size(2) != label_image.size(2):
-                    output = self.interp(output)
-                    output75 = self.interp(output75)
-                    output5 = self.interp(output5)
-                    out_max = self.interp(out_max)
-                loss_output = self.criterion(output, label_image)
-                loss_output75 = self.criterion(output75, label_image)
-                loss_output5 = self.criterion(output5, label_image)
-                loss_out_max = self.criterion(out_max, label_image)
-                loss = loss_output + loss_output75 + loss_output5 + loss_out_max
+                out_max = None
+                loss = 0.0
+                for i, out_scale in enumerate(out):
+                    if out_scale.size(2) != label_image.size(2):
+                        out_scale = self.interp(out_scale)
+                    if i == (len(out) - 1):
+                        out_max = out_scale
+                    loss += self.criterion(out_scale, label_image)
                 label_image_np = label_image.data.cpu().numpy()
                 sig_out_np = out_max.data.cpu().numpy()
                 acc = accuracy(label_image_np, np.argmax(sig_out_np, 1))

@@ -4,6 +4,7 @@ import torch.utils.model_zoo as model_zoo
 import torch
 import numpy as np
 import torch.nn.init as init
+from torch.autograd import Variable
 affine_par = True
 
 
@@ -285,30 +286,36 @@ class ResNet(nn.Module):
         return x
 
 class MS_Deeplab(nn.Module):
-    def __init__(self,block,num_classes):
+    def __init__(self,block,num_classes, scales):
         super(MS_Deeplab,self).__init__()
-        self.Scale = ResNet(block,[3, 4, 23, 3],num_classes)   #changed to fix #4 
+        self.Scale = ResNet(block,[3, 4, 23, 3],num_classes)   #changed to fix #4
+        self.scales = scales
 
-    def forward(self,x):
+    def forward(self, x):
         output = self.Scale(x) # for original scale
         output_size = output.size()[2]
         input_size = x.size()[2]
+        interp_ori = nn.Upsample(size=(output_size, output_size), mode='bilinear')
+        out_scales = [output, ]
 
-        self.interp1 = nn.Upsample(size=(int(input_size*0.75)+1, int(input_size*0.75)+1), mode='bilinear')
-        self.interp2 = nn.Upsample(size=(int(input_size*1.25)+1, int(input_size*1.25)+1), mode='bilinear')
-        self.interp3 = nn.Upsample(size=(output_size, output_size), mode='bilinear')
+        for i, s in enumerate(self.scales):
+            if s == 1:
+                continue
+            else:
+                interp = nn.Upsample(size=(int(input_size * s) + 1, int(input_size * s) + 1), mode='bilinear')
+                x_scale = interp(x)
+                output_scale = interp_ori(self.Scale(x_scale))
+                out_scales.append(output_scale)
 
-        x75 = self.interp1(x)
-        output75 = self.interp3(self.Scale(x75)) # for 0.75x scale
+        out_max = output
+        for out in out_scales:
+            out_max = torch.max(out_max, out)
 
-        x5 = self.interp2(x)
-        output5 = self.interp3(self.Scale(x5))	# for 0.5x scale
+        out_scales.append(out_max)
+        return out_scales
 
-        out_max = torch.max(torch.max(output, output75), output5)
-        return [output, output75, output5, out_max]
-
-def Res_Ms_Deeplab(num_classes=21, pretrained=True):
-    model = MS_Deeplab(Bottleneck, num_classes)
+def Res_Ms_Deeplab(num_classes=21, pretrained=True, scales=[0.75, 1.0, 1.25]):
+    model = MS_Deeplab(Bottleneck, num_classes, scales)
     pretrained_path = 'data/pretrained_model/MS_DeepLab_resnet_pretrained_COCO_init.pth'
     if pretrained:
         saved_state_dict = torch.load(pretrained_path)
