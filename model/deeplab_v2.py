@@ -314,7 +314,7 @@ class MS_Deeplab(nn.Module):
         out_scales.append(out_max)
         return out_scales
 
-def Res_Ms_Deeplab(num_classes=21, pretrained=True, scales=[0.75, 1.0, 1.25]):
+def ms_deeplab_v2(num_classes=21, pretrained=True, scales=[0.75, 1.0, 1.25]):
     model = MS_Deeplab(Bottleneck, num_classes, scales)
     pretrained_path = 'data/pretrained_model/MS_DeepLab_resnet_pretrained_COCO_init.pth'
     if pretrained:
@@ -329,7 +329,7 @@ def Res_Ms_Deeplab(num_classes=21, pretrained=True, scales=[0.75, 1.0, 1.25]):
         model.Scale.load_state_dict(new_params)
     return model
 
-def Res_Deeplab(num_classes=21, is_refine=False, pretrained=True):
+def deeplab_v2(num_classes=21, is_refine=False, pretrained=True):
     if is_refine:
         model = ResNet_Refine(Bottleneck,[3, 4, 23, 3], num_classes)
     else:
@@ -351,7 +351,7 @@ def Res_Deeplab(num_classes=21, is_refine=False, pretrained=True):
     return model
 
 
-def Res50_Deeplab(num_classes=21, is_refine=False, pretrained=True):
+def deeplab50_v2(num_classes=21, is_refine=False, pretrained=True):
     if is_refine:
         model = ResNet_Refine(Bottleneck,[3, 4, 23, 3], num_classes)
     else:

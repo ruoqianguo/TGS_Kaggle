@@ -10,7 +10,8 @@ import torch.nn.init as init
 import torch.backends.cudnn as cudnn
 from model.unet import UNet
 from model.unet_models import UNetResNet34, UNetResNet50, UNetResNet101, UNetResNet152, UNet11, UNetVGG16
-from model.deeplab_v2 import Res_Deeplab, Res_Ms_Deeplab, Res50_Deeplab
+from model.deeplab_v2 import deeplab_v2, deeplab50_v2, ms_deeplab_v2
+from model.deeplab_v3 import deeplab_v3, ms_deeplab_v3
 from model.loss import DiceLoss, MixLoss
 from utils.metrics import accuracy, mIoU, intersection_over_union_thresholds, intersection_over_union
 from skimage.transform import resize
@@ -115,12 +116,17 @@ class BaseModel:
             if args.ms:
                 raise NotImplemented
             else:
-                self.net = Res50_Deeplab(args.num_classes, pretrained=args.pretrained)
+                self.net = deeplab50_v2(args.num_classes, pretrained=args.pretrained)
         elif args.model_name == 'deeplab_v2':
             if args.ms:
-                self.net = Res_Ms_Deeplab(args.num_classes, pretrained=args.pretrained, scales=args.ms_scales)
+                self.net = ms_deeplab_v2(args.num_classes, pretrained=args.pretrained, scales=args.ms_scales)
             else:
-                self.net = Res_Deeplab(args.num_classes, pretrained=args.pretrained)
+                self.net = deeplab_v2(args.num_classes, pretrained=args.pretrained)
+        elif args.model_name == 'deeplab_v3':
+            if args.ms:
+                self.net = ms_deeplab_v3(args.num_classes, out_stride=args.out_stride, pretrained=args.pretrained, scales=args.ms_scales)
+            else:
+                self.net = deeplab_v3(args.num_classes, out_stride=args.out_stride, pretrained=args.pretrained)
 
         self.interp = nn.Upsample(size=args.size, mode='bilinear')
 
