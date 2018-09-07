@@ -318,7 +318,7 @@ def ms_deeplab_v2(num_classes=21, pretrained=True, scales=[0.75, 1.0, 1.25]):
     model = MS_Deeplab(Bottleneck, num_classes, scales)
     pretrained_path = 'data/pretrained_model/MS_DeepLab_resnet_pretrained_COCO_init.pth'
     if pretrained:
-        saved_state_dict = torch.load(pretrained_path)
+        saved_state_dict = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
         new_params = model.Scale.state_dict().copy()
         for i in saved_state_dict:
             # Scale.layer5.conv2d_list.3.weight
@@ -337,7 +337,7 @@ def deeplab_v2(num_classes=21, is_refine=False, pretrained=True):
         model = ResNet(Bottleneck,[3, 4, 23, 3], num_classes)
         # model = ResNet(Bottleneck,[3, 4, 6, 3], num_classes)
         if pretrained:
-            saved_state_dict = torch.load(pretrained_path)
+            saved_state_dict = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
             new_params = model.state_dict().copy()
             for i in saved_state_dict:
                 # Scale.layer5.conv2d_list.3.weight
