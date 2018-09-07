@@ -1,4 +1,4 @@
-from utils.augmentation import BaseTransform
+from utils.augmentation import BaseTransform, BaseTransform2
 from options.base_options import SegOptions
 from dataset.salt_set import SaltSet
 from model.base_model import BaseModel
@@ -32,9 +32,9 @@ if __name__ == '__main__':
 
     pred, true = model.test_val(val_dataloader)
 
-    pred_all = np.argmax(np.array(pred), 1)  #(N, 128, 128)
-    target_all = np.array(true).astype(np.int) # (N, 128, 128)
-    generate_pred_target_pkl(pred_all, target_all)
+    # pred_all = np.argmax(np.array(pred), 1)  #(N, 128, 128)
+    # target_all = np.array(true).astype(np.int) # (N, 128, 128)
+    # generate_pred_target_pkl(pred_all, target_all)
 
     if args.vis:
         print('vis mask ...')
