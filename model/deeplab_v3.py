@@ -15,11 +15,11 @@ def he(param):
 
 def weights_init(m):
     if isinstance(m, nn.Conv2d):
-        xavier(m.weight.data)
+        he(m.weight.data)
         if m.bias is not None:
             m.bias.data.zero_()
     elif isinstance(m, nn.Linear):
-        xavier(m.weight.data)
+        he(m.weight.data)
 
 def outS(i):
     i = int(i)
@@ -90,18 +90,23 @@ class Classifier_Module(nn.Module):
         self.conv2d_list.append(nn.Sequential(*[
             nn.Conv2d(2048, 256, kernel_size=1, stride=1, bias=True),
             nn.BatchNorm2d(256),
+            nn.ReLU(True),
         ]))
 
         for dilation, padding in zip(dilation_series, padding_series):
             self.conv2d_list.append(nn.Sequential(*[
                 nn.Conv2d(2048, 256, kernel_size=3, stride=1, padding=padding, dilation=dilation, bias=True),
-                nn.BatchNorm2d(256)
+                nn.BatchNorm2d(256),
+                nn.ReLU(True),
             ]))
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.pool_conv = nn.Conv2d(2048, 256, 1, bias=True)
         self.pool_bn = nn.BatchNorm2d(256)
+        self.pool_relu = nn.ReLU()
         self.aspp_conv = nn.Conv2d(256*5, 256, 1, bias=True)
         self.aspp_bn = nn.BatchNorm2d(256)
+        self.aspp_relu = nn.ReLU()
+        self.drop_out = nn.Dropout(0.1)
         self.logits = nn.Conv2d(256, num_classes, 1, bias=False)
 
         self.apply(weights_init)
@@ -114,12 +119,13 @@ class Classifier_Module(nn.Module):
 
         # global image level
         pooled = self.avg_pool(x)
-        pool_out = self.pool_bn(self.pool_conv(pooled))
+        pool_out = self.pool_relu(self.pool_bn(self.pool_conv(pooled)))
         in_size = x.size()[2]
         resized = F.upsample(pool_out, size=in_size, mode='bilinear')
         aspp_list.append(resized)
 
-        aspp_out = self.aspp_bn(self.aspp_conv(torch.cat(aspp_list, dim=1))) # bs, 256*5, h/16, w/16
+        aspp_out = self.aspp_relu(self.aspp_bn(self.aspp_conv(torch.cat(aspp_list, dim=1))))  # bs, 256*5, h/16, w/16
+        aspp_out = self.drop_out(aspp_out)
         out = self.logits(aspp_out)
         return out
 
@@ -145,7 +151,8 @@ class ResNet(nn.Module):
                 current_rate *= s
             else:
                 current_stride *= s
-        aspp_rate = [int(6 * (16 / output_stride)), int(12 * (16 / output_stride)), int(18 * (16 / output_stride))]
+        # aspp_rate = [int(6 * (16 / output_stride)), int(12 * (16 / output_stride)), int(18 * (16 / output_stride))]
+        aspp_rate = [int(3 * (16 / output_stride)), int(6 * (16 / output_stride)), int(9 * (16 / output_stride))]
 
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -176,6 +183,8 @@ class ResNet(nn.Module):
             if classname.find('BatchNorm') != -1:
                 for p in m.parameters():
                     p.requires_grad = False
+
+        self.apply(weights_init)
 
         # self.bn1.apply(set_bn_fix)
         # self.layer1.apply(set_bn_fix)

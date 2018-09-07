@@ -4,6 +4,53 @@ import math
 import cv2
 
 
+class RandomScale(object):
+    def __init__(self, low=0.5, high=1.5):
+        self.low = low
+        self.high = high
+
+    def __call__(self, image, mask=None):
+        f_scale = np.random.randint(int(self.low * 10), int(self.high * 10) + 1) / 10.0
+        image = cv2.resize(image, None, fx=f_scale, fy=f_scale, interpolation=cv2.INTER_LINEAR)
+        if mask is not None:
+            mask = cv2.resize(mask, None, fx=f_scale, fy=f_scale, interpolation=cv2.INTER_NEAREST)
+        return image, mask
+
+
+class Crop(object):
+    def __init__(self, crop_h=513, crop_w=513, ignore_label=255, random=True):
+        self.crop_h = crop_h
+        self.crop_w = crop_w
+        self.ignore_label = ignore_label
+        self.random = random
+
+    def __call__(self, image, mask=None):
+        img_h, img_w, _ = image.shape
+        pad_h = max(self.crop_h - img_h, 0)
+        pad_w = max(self.crop_w - img_w, 0)
+        if pad_h > 0 or pad_w > 0:
+            img_pad = cv2.copyMakeBorder(image, 0, pad_h, 0,
+                                         pad_w, cv2.BORDER_CONSTANT,
+                                         value=(0.0, 0.0, 0.0))
+            if mask is not None:
+                mask_pad = cv2.copyMakeBorder(mask, 0, pad_h, 0,
+                                           pad_w, cv2.BORDER_CONSTANT,
+                                           value=(self.ignore_label,))
+        else:
+            img_pad, mask_pad = image, mask
+        img_h, img_w, _ = img_pad.shape
+        if self.random:
+            h_off = np.random.randint(0, img_h - self.crop_h + 1)
+            w_off = np.random.randint(0, img_w - self.crop_w + 1)
+        else:
+            h_off = 0
+            w_off = 0
+        image = np.asarray(img_pad[h_off: h_off + self.crop_h, w_off: w_off + self.crop_w], np.float32)
+        if mask is not None:
+            mask = np.asarray(mask_pad[h_off: h_off + self.crop_h, w_off: w_off + self.crop_w], np.float32)
+        return image, mask
+
+
 class AugmentColor(object):
     def __init__(self):
         self.U = np.array([[-0.56543481, 0.71983482, 0.40240142],
@@ -33,6 +80,7 @@ class RandomHorizontalFlip(object):
             if mask is not None:
                 mask = mask[:, ::-1]
         return img, mask
+
 
 class RandomVerticalFlip(object):
     def __call__(self, img, mask=None):
@@ -82,6 +130,29 @@ class Padding(object):
             expand_mask[:, :] = 0
             expand_mask[int(top):int(top + height),
             int(left):int(left + width)] = mask
+            mask = expand_mask
+
+        return image, mask
+
+
+class BasePadding(object):
+    def __init__(self, size=128, fill=0):
+        self.fill = fill
+        self.size = size
+
+    def __call__(self, image, mask=None):
+        h, w, c = image.shape
+
+        expand_image = np.zeros((self.size, self.size, c), dtype=image.dtype)
+        expand_image[:, :, :] = self.fill
+        left = int((self.size - w) / 2)
+        top = int((self.size - h) / 2)
+        expand_image[top: h + top, left: w + left, :] = image
+        image = expand_image
+
+        if mask is not None:
+            expand_mask = np.zeros((self.size, self.size), dtype=mask.dtype)
+            expand_mask[top:top + h, left:left + w] = mask
             mask = expand_mask
 
         return image, mask
@@ -320,6 +391,44 @@ class BaseTransform(object):
         self.augmentation = Compose([
             Resize(size),
             NormalizeMean(mean)
+        ])
+
+    def __call__(self, image, mask=None):
+        return self.augmentation(image, mask)
+
+
+class BaseTransform2(object):
+    def __init__(self, size, mean, std):
+        self.size = size
+        self.mean = mean
+        self.std = std
+        self.augmentation = Compose([
+            BasePadding(size),
+            NormalizeMean(mean)
+        ])
+
+    def __call__(self, image, mask=None):
+        return self.augmentation(image, mask)
+
+
+class VOCAugmentation(object):
+    def __init__(self, mean, crop_h, crop_w, ignore_label, scale_low, scale_high):
+        self.augmentation = Compose([
+            RandomScale(scale_low, scale_high),
+            NormalizeMean(mean),
+            Crop(crop_h, crop_w, ignore_label, random=True),
+            RandomHorizontalFlip(),
+        ])
+
+    def __call__(self, image, mask):
+        return self.augmentation(image, mask)
+
+
+class VOCBaseTransform(object):
+    def __init__(self, mean, crop_h, crop_w, ignore_label):
+        self.augmentation = Compose([
+            NormalizeMean(mean),
+            Crop(crop_h, crop_w, ignore_label, random=False),
         ])
 
     def __call__(self, image, mask=None):

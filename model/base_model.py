@@ -47,7 +47,7 @@ def get_1x_lr_params_NOscale(model):
         b.append(model.layer1)
         b.append(model.layer2)
         b.append(model.layer3)
-        b.append(model.layer4)
+        b.append(model.layer4)   # test
     except AttributeError:
         b.append(model.Scale.conv1)
         b.append(model.Scale.bn1)
@@ -73,6 +73,7 @@ def get_10x_lr_params(model):
     b = []
     try:
         b.append(model.layer5.parameters())
+        # b.append(model.layer4.parameters())
     except AttributeError:
         b.append(model.Scale.layer5.parameters())
 
@@ -171,6 +172,7 @@ class BaseModel:
                     i_parts = i.split('.')
                     # print i_parts
                     if not (i_parts[0] == 'layer5'):
+                    # if (not (i_parts[0] == 'layer5')) or (not (i_parts[0] == 'layer4')):
                         new_params[i] = saved_state_dict[i]
                 self.net.load_state_dict(new_params)
 
@@ -232,7 +234,7 @@ class BaseModel:
                 if out_max.size(2) != image.size(2):
                     out = self.interp(out_max)
             else:
-                if out.size(2) != 128:
+                if out.size(2) != image.size(2):
                     out = self.interp(out)
             out = F.softmax(out)
             output.extend([resize(pred[1].data.cpu().numpy(), (101,101)) for pred in out])
@@ -256,7 +258,7 @@ class BaseModel:
         assert self.phase == 'test', "Command arg phase should be 'test'. "
         from tqdm import tqdm
         self.net.eval()
-        pred = []
+        predict = []
         true = []
         t1 = time.time()
 
@@ -275,15 +277,15 @@ class BaseModel:
                 if out_max.size(2) != label_image.size(2):
                     out = self.interp(out_max)
             else:
-                if out.size(2) != label_image.size(2):
+                if out.size(2) != image.size(2):
                     out = self.interp(out)
             out = F.softmax(out)
-            pred.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
+            predict.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
 
             # pred.extend(out.data.cpu().numpy())
             true.extend(label_image.data.cpu().numpy())
         # pred_all = np.argmax(np.array(pred), 1)
-        pred_all = np.array(pred) > 0.5
+        pred_all = np.array(predict) > 0.5
         true_all = np.array(true).astype(np.int)
         # new_iou = intersection_over_union(true_all, pred_all)
         # new_iou_t = intersection_over_union_thresholds(true_all, pred_all)
@@ -291,7 +293,7 @@ class BaseModel:
 
         print('mean IoU : {:.4f}, IoU threshold : {:.4f}'.format(mean_iou, iou_t))
 
-        return pred, true
+        return predict, true
 
     def run_epoch(self, dataloader, writer, epoch, train=True, metrics=True):
         if train:
