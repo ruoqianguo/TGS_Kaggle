@@ -1,4 +1,4 @@
-from utils.augmentation import BaseTransform, BaseTransform2
+from utils.augmentation import BaseTransform, BaseTransform2, VOCBaseTransform
 from options.base_options import SegOptions
 from dataset.salt_set import SaltSet
 from model.base_model import BaseModel
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     image_root = os.path.join(args.data_root, 'train', 'images')
 
     val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None), use_depth=args.use_depth, original_mask=True)
-
+    # val_dataset = SaltSet(val, image_root, VOCBaseTransform(MEAN, args.size, args.size, 0), args.use_depth, original_mask=True)
     val_dataloader = data.DataLoader(val_dataset, batch_size=args.batch_size, num_workers=args.num_workers,
                                      pin_memory=True,
                                      shuffle=False)

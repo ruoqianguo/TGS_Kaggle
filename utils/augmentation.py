@@ -79,7 +79,7 @@ class RandomHorizontalFlip(object):
             img = img[:, ::-1]
             if mask is not None:
                 mask = mask[:, ::-1]
-        return img, mask
+        return np.ascontiguousarray(img), np.ascontiguousarray(mask)
 
 
 class RandomVerticalFlip(object):
@@ -415,6 +415,8 @@ class VOCAugmentation(object):
     def __init__(self, mean, crop_h, crop_w, ignore_label, scale_low, scale_high):
         self.augmentation = Compose([
             RandomScale(scale_low, scale_high),
+            RandomRotate(),
+            RandomRotateAlpha(45),
             NormalizeMean(mean),
             Crop(crop_h, crop_w, ignore_label, random=True),
             RandomHorizontalFlip(),

@@ -283,8 +283,8 @@ def ms_deeplab_v3(num_classes=21, out_stride=16, scales=[0.75, 1.0, 1.25], pretr
             # Scale.layer5.conv2d_list.3.weight
             i_parts = i.split('.')
             # print i_parts
-            if not (i_parts[1] == 'layer5'):
-                new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+            if not (i_parts[0] == 'layer5'):
+                new_params[i] = saved_state_dict[i]
         model.Scale.load_state_dict(new_params)
 
     return model

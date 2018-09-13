@@ -12,7 +12,7 @@ from model.unet import UNet
 from model.unet_models import UNetResNet34, UNetResNet50, UNetResNet101, UNetResNet152, UNet11, UNetVGG16
 from model.deeplab_v2 import deeplab_v2, deeplab50_v2, ms_deeplab_v2
 from model.deeplab_v3 import deeplab_v3, ms_deeplab_v3
-from model.loss import DiceLoss, MixLoss
+from model.loss import DiceLoss, MixLoss, LovaszSoftmax
 from utils.metrics import accuracy, mIoU, intersection_over_union_thresholds, intersection_over_union
 from skimage.transform import resize
 
@@ -141,6 +141,8 @@ class BaseModel:
             self.criterion = DiceLoss(num_classes=args.num_classes)
         elif args.loss == 'MixLoss':
             self.criterion = MixLoss(args.num_classes, weights=args.loss_weights)
+        elif args.loss == 'LovaszLoss':
+            self.criterion = LovaszSoftmax()
         else:
             raise RuntimeError('must define loss')
 
@@ -281,7 +283,7 @@ class BaseModel:
                     out = self.interp(out)
             out = F.softmax(out)
             predict.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
-
+            # predict.extend([pred[1, :101, :101].data.cpu().numpy() for pred in out])
             # pred.extend(out.data.cpu().numpy())
             true.extend(label_image.data.cpu().numpy())
         # pred_all = np.argmax(np.array(pred), 1)

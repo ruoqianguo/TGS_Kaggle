@@ -1,4 +1,4 @@
-from utils.augmentation import Augmentation, BaseTransform
+from utils.augmentation import Augmentation, BaseTransform, VOCAugmentation, VOCBaseTransform
 from options.base_options import SegOptions
 from tensorboardX import SummaryWriter
 from dataset.salt_set import SaltSet
@@ -26,6 +26,9 @@ if __name__ == '__main__':
 
     train_dataset = SaltSet(train, image_root, Augmentation(args.size, MEAN, None), args.use_depth)
     val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None), args.use_depth)
+
+    # train_dataset = SaltSet(train, image_root, VOCAugmentation(MEAN, args.size, args.size, 0, 0.5, 1.5), args.use_depth)
+    # val_dataset = SaltSet(val, image_root, VOCBaseTransform(MEAN, args.size, args.size, 0), args.use_depth)
 
     train_dataloader = data.DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers,
                                        pin_memory=True, shuffle=True)

@@ -1,9 +1,8 @@
 import torch.nn as nn
-import torch
 import torch.nn.functional as F
 from utils.func import one_hot_embedding
 from torch.nn import BCELoss, CrossEntropyLoss
-
+from model.lovasz_loss import lovasz_softmax
 
 class DiceLoss(nn.Module):
 
@@ -47,3 +46,18 @@ class MixLoss(nn.Module):
         diceloss = self.diceloss(input, target)
         celoss = self.celoss(input, target)
         return celoss * self.weights[0] + diceloss * self.weights[1]
+
+
+class LovaszSoftmax(nn.Module):
+    def __init__(self):
+        super(LovaszSoftmax, self).__init__()
+        self.lovasz_softmax = lovasz_softmax
+
+    def forward(self, pred, label):
+        """
+        :param pred:  b, c, h, w
+        :param label:  b, h, w
+        :return:
+        """
+        pred = F.softmax(pred, dim=1)
+        return self.lovasz_softmax(pred, label)
