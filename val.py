@@ -5,7 +5,8 @@ from model.base_model import BaseModel
 from utils.func import save_img, generate_pred_target_pkl
 import torch.utils.data as data
 from tqdm import tqdm
-import numpy as np
+from utils.tta import tta_collate
+from torch.utils.data.dataloader import default_collate
 import pickle
 import os
 
@@ -23,7 +24,7 @@ if __name__ == '__main__':
     val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None), use_depth=args.use_depth, original_mask=True)
     # val_dataset = SaltSet(val, image_root, VOCBaseTransform(MEAN, args.size, args.size, 0), args.use_depth, original_mask=True)
     val_dataloader = data.DataLoader(val_dataset, batch_size=args.batch_size, num_workers=args.num_workers,
-                                     pin_memory=True,
+                                     pin_memory=True, collate_fn=tta_collate if args.use_tta else default_collate,
                                      shuffle=False)
 
     model = BaseModel(args)

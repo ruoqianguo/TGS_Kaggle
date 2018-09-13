@@ -15,6 +15,7 @@ from model.deeplab_v3 import deeplab_v3, ms_deeplab_v3
 from model.loss import DiceLoss, MixLoss, LovaszSoftmax, FocalLoss
 from utils.metrics import accuracy, mIoU, intersection_over_union_thresholds, intersection_over_union
 from skimage.transform import resize
+from utils.tta import tta_config, detta_score
 
 def xavier(param):
     init.xavier_uniform(param)
@@ -240,8 +241,15 @@ class BaseModel:
             else:
                 if out.size(2) != image.size(2):
                     out = self.interp(out)
+            # out [bs * num_tta, c, h, w]
+            if self.args.use_tta:
+                num_tta = len(tta_config)
+                # out = F.softmax(out, dim=1)
+                out = detta_score(out.view(num_tta, -1, self.args.num_classes, out.size(2),
+                                           out.size(3)))  # [num_tta, bs, nclass, H, W]
+                out = out.mean(dim=0)  # [bs, nclass, H, W]
             out = F.softmax(out)
-            output.extend([resize(pred[1].data.cpu().numpy(), (101,101)) for pred in out])
+            output.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
         return np.array(output)
 
     def tta(self, dataloaders):
@@ -283,6 +291,13 @@ class BaseModel:
             else:
                 if out.size(2) != image.size(2):
                     out = self.interp(out)
+            # out [bs * num_tta, c, h, w]
+            if self.args.use_tta:
+                num_tta = len(tta_config)
+                # out = F.softmax(out, dim=1)
+                out = detta_score(out.view(num_tta, -1, self.args.num_classes, out.size(2),
+                                           out.size(3)))  # [num_tta, bs, nclass, H, W]
+                out = out.mean(dim=0)  # [bs, nclass, H, W]
             out = F.softmax(out)
             predict.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
             # predict.extend([pred[1, :101, :101].data.cpu().numpy() for pred in out])

@@ -51,6 +51,7 @@ class SegOptions(object):
 
         # eval
         self.parser.add_argument('--trained_model', type=str, help='the path of trained model')
+        self.parser.add_argument('--use_tta', help='whether use tta', action='store_true')
 
     def parse(self):
         if not self.initialized:

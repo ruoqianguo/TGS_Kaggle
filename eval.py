@@ -5,7 +5,8 @@ from model.base_model import BaseModel
 from utils.func import save_img, RLenc, downsample
 from rlen import make_submission
 import torch.utils.data as data
-from tqdm import tqdm
+from utils.tta import tta_collate
+from torch.utils.data.dataloader import default_collate
 import numpy as np
 import pandas as pd
 import pickle
@@ -26,7 +27,7 @@ if __name__ == '__main__':
     test_dataset = SaltSetDeploy(test, image_root, BaseTransform(args.size, MEAN, None), use_depth=args.use_depth)
 
     test_dataloader = data.DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.num_workers,
-                                     pin_memory=True,
+                                     pin_memory=True, collate_fn=tta_collate if args.use_tta else default_collate,
                                      shuffle=False)
 
     model = BaseModel(args)
