@@ -1,3 +1,5 @@
+import torch
+from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 from utils.func import one_hot_embedding
@@ -61,3 +63,46 @@ class LovaszSoftmax(nn.Module):
         """
         pred = F.softmax(pred, dim=1)
         return self.lovasz_softmax(pred, label)
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, num_classes, alpha, gamma):
+        super(FocalLoss, self).__init__()
+
+        self.num_classes = num_classes
+
+        if alpha is not None:
+            self.alpha = torch.ones(num_classes) * alpha
+            self.alpha[0] = 1 - alpha
+            self.alpha = Variable(self.alpha.cuda(), requires_grad=False)
+        else:
+            self.alpha = Variable(torch.ones(num_classes).cuda(), requires_grad=False)
+
+        self.gamma = gamma
+
+    def forward(self, pred, label):
+        '''Focal loss.
+
+        Args:
+          pred: (tensor) sized [b, c, h, w]
+          label: (tensor) sized [b, h, w].
+
+        Return:
+          (tensor) focal loss.
+        '''
+
+        x = pred.permute(0, 2, 3, 1).contiguous().view(-1, self.num_classes)
+        y = label.view(-1)
+
+        p = F.softmax(x)
+        p = p.gather(1, y.view(-1, 1)).view(-1)
+        log_p = (p + 1e-6).log()
+
+        alpha = self.alpha[y.long().view(-1)]
+        # w = self.alpha * t + (1 - self.alpha) * (1 - t)  # w = alpha if t > 0 else 1-alpha
+        w = alpha * (1 - p.detach()).pow(self.gamma)
+        loss = -(w * log_p)
+        # print('w', w)
+        # print('p', p)
+        # print('################################')
+        return loss.mean()
