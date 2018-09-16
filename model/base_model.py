@@ -12,6 +12,7 @@ from model.unet import UNet
 from model.unet_models import UNetResNet34, UNetResNet50, UNetResNet101, UNetResNet152, UNet11, UNetVGG16
 from model.deeplab_v2 import deeplab_v2, deeplab50_v2, ms_deeplab_v2
 from model.deeplab_v3 import deeplab_v3, ms_deeplab_v3
+from model.deeplab_v3_plus import deeplab_v3_plus, ms_deeplab_v3_plus
 from model.loss import DiceLoss, MixLoss, LovaszSoftmax, FocalLoss
 from utils.metrics import accuracy, mIoU, intersection_over_union_thresholds, intersection_over_union
 from skimage.transform import resize
@@ -72,11 +73,14 @@ def get_10x_lr_params(model):
     which does the classification of pixel into classes
     """
     b = []
-    try:
-        b.append(model.layer5.parameters())
-        # b.append(model.layer4.parameters())
-    except AttributeError:
+    if model.__class__.__name__ == 'MS_Deeplab':
         b.append(model.Scale.layer5.parameters())
+        if model.Scale.__class__.__name__ == 'DeepLabV3Plus':
+            b.append(model.Scale.decoder.parameters())
+    elif 'DeepLab' in model.__class__.__name__:
+        b.append(model.layer5.parameters())
+        if model.__class__.__name__ == 'DeepLabV3Plus':
+            b.append(model.decoder.parameters())
 
     for j in range(len(b)):
         for i in b[j]:
@@ -129,6 +133,11 @@ class BaseModel:
                 self.net = ms_deeplab_v3(args.num_classes, out_stride=args.out_stride, pretrained=args.pretrained, scales=args.ms_scales)
             else:
                 self.net = deeplab_v3(args.num_classes, out_stride=args.out_stride, pretrained=args.pretrained)
+        elif args.model_name == 'deeplab_v3_plus':
+            if args.ms:
+                self.net = ms_deeplab_v3_plus(args.num_classes, out_stride=args.out_stride, pretrained=args.pretrained, scales=args.ms_scales)
+            else:
+                self.net = deeplab_v3_plus(args.num_classes, out_stride=args.out_stride, pretrained=args.pretrained)
 
         self.interp = nn.Upsample(size=args.size, mode='bilinear')
 
@@ -170,7 +179,7 @@ class BaseModel:
                     # Scale.layer5.conv2d_list.3.weight
                     i_parts = i.split('.')
                     # print i_parts
-                    if not (i_parts[0] == 'layer5'):
+                    if not (not i_parts[0] == 'layer5') and (not i_parts[0] == 'decoder'):
                         new_params[i] = saved_state_dict[i]
                 self.net.Scale.load_state_dict(new_params)
             else:
@@ -179,7 +188,7 @@ class BaseModel:
                     # Scale.layer5.conv2d_list.3.weight
                     i_parts = i.split('.')
                     # print i_parts
-                    if not (i_parts[0] == 'layer5'):
+                    if (not i_parts[0] == 'layer5') and (not i_parts[0] == 'decoder'):
                     # if (not (i_parts[0] == 'layer5')) or (not (i_parts[0] == 'layer4')):
                         new_params[i] = saved_state_dict[i]
                 self.net.load_state_dict(new_params)

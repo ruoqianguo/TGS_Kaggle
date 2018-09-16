@@ -221,10 +221,10 @@ class ResNet_Refine(nn.Module):
 
         return x     
 
-class ResNet(nn.Module):
+class DeepLab(nn.Module):
     def __init__(self, block, layers, num_classes):
         self.inplanes = 64
-        super(ResNet, self).__init__()
+        super(DeepLab, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine = affine_par)
@@ -288,7 +288,7 @@ class ResNet(nn.Module):
 class MS_Deeplab(nn.Module):
     def __init__(self,block,num_classes, scales):
         super(MS_Deeplab,self).__init__()
-        self.Scale = ResNet(block,[3, 4, 23, 3],num_classes)   #changed to fix #4
+        self.Scale = DeepLab(block,[3, 4, 23, 3],num_classes)   #changed to fix #4
         self.scales = scales
 
     def forward(self, x):
@@ -334,7 +334,7 @@ def deeplab_v2(num_classes=21, is_refine=False, pretrained=True):
         model = ResNet_Refine(Bottleneck,[3, 4, 23, 3], num_classes)
     else:
         pretrained_path = 'data/pretrained_model/MS_DeepLab_resnet_pretrained_COCO_init.pth'
-        model = ResNet(Bottleneck,[3, 4, 23, 3], num_classes)
+        model = DeepLab(Bottleneck,[3, 4, 23, 3], num_classes)
         # model = ResNet(Bottleneck,[3, 4, 6, 3], num_classes)
         if pretrained:
             saved_state_dict = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
@@ -357,7 +357,7 @@ def deeplab50_v2(num_classes=21, is_refine=False, pretrained=True):
     else:
         pretrained_path = 'data/pretrained_model/VOC12_scenes_240_2644.pth'
         # model = ResNet(Bottleneck,[3, 4, 23, 3], num_classes)
-        model = ResNet(Bottleneck,[3, 4, 6, 3], num_classes)
+        model = DeepLab(Bottleneck,[3, 4, 6, 3], num_classes)
         if pretrained:
             saved_state_dict = torch.load(pretrained_path)['model']
             new_params = model.state_dict().copy()

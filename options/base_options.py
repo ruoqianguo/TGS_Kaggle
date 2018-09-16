@@ -27,10 +27,10 @@ class SegOptions(object):
 
         # train opt
         self.parser.add_argument('--model_name', default='UNet', type=str,
-                                 choices=['UNet', 'UNetResNet34', 'UNet11', 'UNetVGG16', 'UNetResNet152', 'deeplab_v2', 'deeplab50_v2', 'deeplab_v3'], help='image_model')
+                                 choices=['UNet', 'UNetResNet34', 'UNet11', 'UNetVGG16', 'UNetResNet152', 'deeplab_v2', 'deeplab50_v2', 'deeplab_v3', 'deeplab_v3_plus'], help='image_model')
         self.parser.add_argument('--loss', default='CELoss', type=str,
                                  choices=['DiceLoss', 'CELoss', 'MixLoss', 'LovaszLoss', 'FocalLoss'], help='image_model')
-        self.parser.add_argument('--loss_per_img', help='whether compute Lovaszloss per image', ction='store_true')
+        self.parser.add_argument('--loss_per_img', help='whether compute Lovaszloss per image', action='store_true')
         self.parser.add_argument('--loss_weights', default=[1.0, 1.0], nargs='+', type=float, help='# 0 celoss, # 1 diceloss')
         self.parser.add_argument('--epochs', default=30, type=int, help='Number of training iterations')
         self.parser.add_argument('--stepvalues', default=[18, 25], nargs='+', type=int, help='# of iter to change lr')
