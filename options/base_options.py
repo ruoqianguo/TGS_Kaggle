@@ -30,12 +30,13 @@ class SegOptions(object):
                                  choices=['UNet', 'UNetResNet34', 'UNet11', 'UNetVGG16', 'UNetResNet152', 'deeplab_v2', 'deeplab50_v2', 'deeplab_v3'], help='image_model')
         self.parser.add_argument('--loss', default='CELoss', type=str,
                                  choices=['DiceLoss', 'CELoss', 'MixLoss', 'LovaszLoss', 'FocalLoss'], help='image_model')
+        self.parser.add_argument('--loss_per_img', help='whether compute Lovaszloss per image', ction='store_true')
         self.parser.add_argument('--loss_weights', default=[1.0, 1.0], nargs='+', type=float, help='# 0 celoss, # 1 diceloss')
         self.parser.add_argument('--epochs', default=30, type=int, help='Number of training iterations')
         self.parser.add_argument('--stepvalues', default=[18, 25], nargs='+', type=int, help='# of iter to change lr')
         self.parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
         self.parser.add_argument('--weight_decay', '--wd', default=5e-4, type=float, help='Weight decay for SGD')
-        self.parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD lr')
+        self.parser.add_argument('--gamma', default=0.5, type=float, help='Gamma update for SGD lr')
         self.parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
         self.parser.add_argument('--batch_size', default=4, type=int, help='Batch size for training')
         self.parser.add_argument('--save_freq', default=5, type=int, help='save weights every # epochs')
@@ -45,6 +46,10 @@ class SegOptions(object):
         self.parser.add_argument('--ms', '--multi_scale', help='whether use multi scale', action='store_true')
         self.parser.add_argument('--ms_scales', default=[0.75, 1.0, 1.25], nargs='+', type=float, help='ms scale')
         self.parser.add_argument('--out_stride', default=16, type=int, help='out stride')
+        self.parser.add_argument('--mGPUs', dest='mGPUs',
+                            help='whether use multiple GPUs',
+                            action='store_true')
+        self.parser.add_argument('--lr_policy', default='poly', type=str, choices=['poly', 'step'])
 
         # fixed args
         self.parser.add_argument('--num_classes', default=2, type=int, help='# lesion + bg')

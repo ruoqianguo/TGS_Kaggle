@@ -24,7 +24,7 @@ if __name__ == '__main__':
     val = pickle.load(open(os.path.join(args.data_root, 'val.pkl'), 'rb'))
     image_root = os.path.join(args.data_root, 'train', 'images')
 
-    train_dataset = SaltSet(train, image_root, Augmentation(args.size, MEAN, None), args.use_depth)
+    train_dataset = SaltSet(train, image_root, Augmentation(args.size, MEAN, None, scale=(0.1, 1.0)), args.use_depth)
     val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None), args.use_depth)
 
     # train_dataset = SaltSet(train, image_root, VOCAugmentation(MEAN, args.size, args.size, 0, 0.5, 1.5), args.use_depth)

@@ -136,6 +136,7 @@ class BaseModel:
         self.lr_current = args.lr
         self.cuda = args.cuda
         self.phase = args.phase
+        self.lr_poly = (args.lr_policy == 'poly')
         if args.loss == 'CELoss':
             self.criterion = nn.CrossEntropyLoss(size_average=True)
         elif args.loss == 'DiceLoss':
@@ -143,7 +144,7 @@ class BaseModel:
         elif args.loss == 'MixLoss':
             self.criterion = MixLoss(args.num_classes, weights=args.loss_weights)
         elif args.loss == 'LovaszLoss':
-            self.criterion = LovaszSoftmax()
+            self.criterion = LovaszSoftmax(per_image=args.loss_per_img)
         elif args.loss == 'FocalLoss':
             self.criterion = FocalLoss(args.num_classes, 0.25, 2)
         else:
@@ -157,6 +158,8 @@ class BaseModel:
             self.optimizer = optim.SGD(filter(lambda p: p.requires_grad, self.net.parameters()), lr=args.lr,
                                    momentum=args.momentum, weight_decay=args.weight_decay)
         self.iters = 0
+        self.best_val = 0.0
+        self.count = 0
 
     def init_model(self):
         if self.args.resume_model:
@@ -184,6 +187,9 @@ class BaseModel:
             print('Resuming training, image net loading {}...'.format(self.args.resume_model))
             # self.load_weights(self.net, self.args.resume_model)
 
+        if self.args.mGPUs:
+            self.net = nn.DataParallel(self.net)
+
         if self.args.cuda:
             self.net = self.net.cuda()
             cudnn.benchmark = True
@@ -193,10 +199,14 @@ class BaseModel:
         # Adapted from PyTorch Imagenet example:
         # https://github.com/pytorch/examples/blob/master/imagenet/main.py
         """
-        if epoch in self.args.stepvalues:
-            self.lr_current = self.lr_current * self.args.gamma
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = self.lr_current
+        if epoch < int(self.iterations * 0.5):
+            self.lr_current = max(self.lr_current * self.args.gamma, 1e-4)
+        elif epoch < int(self.iterations * 0.85):
+            self.lr_current = max(self.lr_current * self.args.gamma, 1e-5)
+        else:
+            self.lr_current = max(self.lr_current * self.args.gamma, 1e-6)
+        self.optimizer.param_groups[0]['lr'] = self.lr_current
+        self.optimizer.param_groups[1]['lr'] = self.lr_current * 10
 
     def save_network(self, net, net_name, epoch, label=''):
         save_fname = '%s_%s_%s.pth' % (epoch, net_name, label)
@@ -323,7 +333,7 @@ class BaseModel:
             flag = 'val'
         t2 = time.time()
         for image, mask in dataloader:
-            if train:
+            if train and self.lr_poly:
                 adjust_learning_rate(self.args.lr, self.optimizer, self.iters, self.iterations * len(dataloader), 0.9)
                 self.iters += 1
 
@@ -414,16 +424,42 @@ class BaseModel:
             self.acces[flag] = []
             self.scores[flag] = []
 
+            if (not train) and (iou_t >= self.best_val):
+                if self.args.ms:
+                    if self.args.mGPUs:
+                        self.save_network(self.net.module.Scale, self.args.model_name, epoch=epoch, label='best')
+                    else:
+                        self.save_network(self.net.Scale, self.args.model_name, epoch=epoch, label='best')
+                else:
+                    if self.args.mGPUs:
+                        self.save_network(self.net.module, self.args.model_name, epoch=epoch, label='best')
+                    else:
+                        self.save_network(self.net, self.args.model_name, epoch=epoch, label='best')
+                print('val improve from {:.4f} to {:.4f} saving in best val_iteration {}'.format(self.best_val, iou_t, epoch))
+                self.best_val = iou_t
+                self.count = 0
+
+            if (not train) and (self.best_val - iou_t > 0.003) and (self.count < 10) and (not self.lr_poly):
+                self.count += 1
+            if (not train) and (self.count >= 10) and (not self.lr_poly):
+                self._adjust_learning_rate(epoch)
+                self.count = 0
+
     def train_val(self, dataloader_train, dataloader_val, writer):
         val_epoch = 0
         for epoch in range(self.iterations):
             self.run_epoch(dataloader_train, writer, epoch, train=True, metrics=True)
+            self.run_epoch(dataloader_val, writer, val_epoch, train=False, metrics=True)
+            val_epoch += 1
             if (epoch+1) % self.args.save_freq == 0:
-                self.run_epoch(dataloader_val, writer, val_epoch, train=False, metrics=True)
-                val_epoch += 1
-
                 if self.args.ms:
-                    self.save_network(self.net.Scale, self.args.model_name, epoch=val_epoch, )
+                    if self.args.mGPUs:
+                        self.save_network(self.net.module.Scale, self.args.model_name, epoch=val_epoch, )
+                    else:
+                        self.save_network(self.net.Scale, self.args.model_name, epoch=val_epoch, )
                 else:
-                    self.save_network(self.net, self.args.model_name, epoch=val_epoch, )
+                    if self.args.mGPUs:
+                        self.save_network(self.net.module, self.args.model_name, epoch=val_epoch, )
+                    else:
+                        self.save_network(self.net, self.args.model_name, epoch=val_epoch, )
                 print('saving in val_iteration {}'.format(val_epoch))

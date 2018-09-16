@@ -51,9 +51,10 @@ class MixLoss(nn.Module):
 
 
 class LovaszSoftmax(nn.Module):
-    def __init__(self):
+    def __init__(self, per_image=False):
         super(LovaszSoftmax, self).__init__()
         self.lovasz_softmax = lovasz_softmax
+        self.per_image = per_image
 
     def forward(self, pred, label):
         """
@@ -62,7 +63,7 @@ class LovaszSoftmax(nn.Module):
         :return:
         """
         pred = F.softmax(pred, dim=1)
-        return self.lovasz_softmax(pred, label)
+        return self.lovasz_softmax(pred, label, per_image=self.per_image)
 
 
 class FocalLoss(nn.Module):
