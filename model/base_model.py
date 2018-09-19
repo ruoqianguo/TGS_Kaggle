@@ -318,12 +318,14 @@ class BaseModel:
                                            out.size(3)))  # [num_tta, bs, nclass, H, W]
                 out = out.mean(dim=0)  # [bs, nclass, H, W]
             out = F.softmax(out)
+            if self.args.aug == 'heng':
+                out = out[:, :, 11:11+202, 11:11+202]
             predict.extend([resize(pred[1].data.cpu().numpy(), (101, 101)) for pred in out])
             # predict.extend([pred[1, :101, :101].data.cpu().numpy() for pred in out])
             # pred.extend(out.data.cpu().numpy())
             true.extend(label_image.data.cpu().numpy())
         # pred_all = np.argmax(np.array(pred), 1)
-        for t in np.arange(0.3, 0.6, 0.01):
+        for t in np.arange(0.25, 0.55, 0.01):
             pred_all = np.array(predict) > t
             true_all = np.array(true).astype(np.int)
             # new_iou = intersection_over_union(true_all, pred_all)

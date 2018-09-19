@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     # generate csv
     print('generate csv ...')
-    for t in [0.45, ]:
+    for t in [0.27, ]:
         make_submission((preds_test > t).astype(np.uint8), test['names'], path='{}_{:.2f}_submission.csv'.format(args.exp_name, t))
     # pred_dict = {idx: RLenc(np.round(preds_test[i] > 0.5)) for
     #              i, idx in tqdm(enumerate(test['names']))}
