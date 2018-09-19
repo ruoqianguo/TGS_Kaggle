@@ -1,4 +1,4 @@
-from utils.augmentation import BaseTransform, BaseTransform2, VOCBaseTransform
+from utils.augmentation import BaseTransform, HengBaseTransform
 from options.base_options import SegOptions
 from dataset.salt_set import SaltSet
 from model.base_model import BaseModel
@@ -21,7 +21,14 @@ if __name__ == '__main__':
     val = pickle.load(open(os.path.join(args.data_root, 'val.pkl'), 'rb'))
     image_root = os.path.join(args.data_root, 'train', 'images')
 
-    val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None), use_depth=args.use_depth, original_mask=True)
+    if args.aug == 'heng':
+        base_aug = HengBaseTransform(MEAN)
+    elif args.aug == 'default':
+        base_aug = BaseTransform(args.size, MEAN, None)
+    else:
+        raise NotImplemented
+
+    val_dataset = SaltSet(val, image_root, base_aug, use_depth=args.use_depth, original_mask=True)
     # val_dataset = SaltSet(val, image_root, VOCBaseTransform(MEAN, args.size, args.size, 0), args.use_depth, original_mask=True)
     val_dataloader = data.DataLoader(val_dataset, batch_size=args.batch_size, num_workers=args.num_workers,
                                      pin_memory=True, collate_fn=tta_collate if args.use_tta else default_collate,

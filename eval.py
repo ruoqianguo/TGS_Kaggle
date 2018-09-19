@@ -1,4 +1,4 @@
-from utils.augmentation import BaseTransform
+from utils.augmentation import BaseTransform, HengBaseTransform
 from options.base_options import SegOptions
 from dataset.salt_set import SaltSetDeploy
 from model.base_model import BaseModel
@@ -24,7 +24,14 @@ if __name__ == '__main__':
     test = pickle.load(open(os.path.join(args.data_root, 'test.pkl'), 'rb'))
     image_root = os.path.join(args.data_root, 'test', 'images')
 
-    test_dataset = SaltSetDeploy(test, image_root, BaseTransform(args.size, MEAN, None), use_depth=args.use_depth)
+    if args.aug == 'heng':
+        base_aug = HengBaseTransform(MEAN)
+    elif args.aug == 'default':
+        base_aug = BaseTransform(args.size, MEAN, None)
+    else:
+        raise NotImplemented
+
+    test_dataset = SaltSetDeploy(test, image_root, base_aug, use_depth=args.use_depth)
 
     test_dataloader = data.DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.num_workers,
                                      pin_memory=True, collate_fn=tta_collate if args.use_tta else default_collate,
@@ -38,7 +45,8 @@ if __name__ == '__main__':
 
     # generate csv
     print('generate csv ...')
-    make_submission((preds_test>0.5).astype(np.uint8), test['names'], path='{}_submission.csv'.format(args.exp_name))
+    for t in [0.45, ]:
+        make_submission((preds_test > t).astype(np.uint8), test['names'], path='{}_{:.2f}_submission.csv'.format(args.exp_name, t))
     # pred_dict = {idx: RLenc(np.round(preds_test[i] > 0.5)) for
     #              i, idx in tqdm(enumerate(test['names']))}
     #

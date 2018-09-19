@@ -1,4 +1,4 @@
-from utils.augmentation import Augmentation, BaseTransform, VOCAugmentation, VOCBaseTransform
+from utils.augmentation import Augmentation, BaseTransform, HengAugmentation, HengBaseTransform
 from options.base_options import SegOptions
 from tensorboardX import SummaryWriter
 from dataset.salt_set import SaltSet
@@ -24,8 +24,17 @@ if __name__ == '__main__':
     val = pickle.load(open(os.path.join(args.data_root, 'val.pkl'), 'rb'))
     image_root = os.path.join(args.data_root, 'train', 'images')
 
-    train_dataset = SaltSet(train, image_root, Augmentation(args.size, MEAN, None, scale=(0.1, 1.0)), args.use_depth)
-    val_dataset = SaltSet(val, image_root, BaseTransform(args.size, MEAN, None), args.use_depth)
+    if args.aug == 'heng':
+        aug = HengAugmentation(MEAN)
+        base_aug = HengBaseTransform(MEAN)
+    elif args.aug == 'default':
+        aug = Augmentation(args.size, MEAN, None, scale=(0.1, 1.0))
+        base_aug = BaseTransform(args.size, MEAN, None)
+    else:
+        raise NotImplemented
+
+    train_dataset = SaltSet(train, image_root, aug, args.use_depth)
+    val_dataset = SaltSet(val, image_root, base_aug, args.use_depth)
 
     # train_dataset = SaltSet(train, image_root, VOCAugmentation(MEAN, args.size, args.size, 0, 0.5, 1.5), args.use_depth)
     # val_dataset = SaltSet(val, image_root, VOCBaseTransform(MEAN, args.size, args.size, 0), args.use_depth)

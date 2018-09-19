@@ -234,6 +234,19 @@ class RandomContrast(object):
         return image, mask
 
 
+class RandomGamma(object):
+    def __init__(self, gamma=1.0):
+        self.gamma = gamma
+
+    # expects float image
+    def __call__(self, image, mask=None):
+        if np.random.randint(2):
+            gamma = np.random.uniform(1-self.gamma, 1+self.gamma)
+            image **= (1.0/gamma)
+            image = np.clip(image, 0, 255)
+        return image, mask
+
+
 class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
@@ -357,6 +370,239 @@ class Resize(object):
         if mask is not None:
             mask = cv2.resize(mask, (self.size, self.size), interpolation=cv2.INTER_NEAREST)
         return image, mask
+
+
+class HorizontalShear(object):
+    def __init__(self, low=-0.07, high=0.07):
+        self.low = low
+        self.high = high
+
+    def __call__(self, image, mask):
+        if np.random.randint(2):
+            return image, mask
+
+        dx = np.random.uniform(self.low, self.high)
+        borderMode = cv2.BORDER_REFLECT_101
+        height, width = image.shape[:2]
+        dx = int(dx * width)
+
+        box0 = np.array([[0, 0], [width, 0], [width, height], [0, height], ], np.float32)
+        box1 = np.array([[+dx, 0], [width + dx, 0], [width - dx, height], [-dx, height], ], np.float32)
+
+        box0 = box0.astype(np.float32)
+        box1 = box1.astype(np.float32)
+        mat = cv2.getPerspectiveTransform(box0, box1)
+
+        image = cv2.warpPerspective(image, mat, (width, height), flags=cv2.INTER_LINEAR,
+                                    borderMode=borderMode, borderValue=(
+            0, 0, 0,))  # cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
+        mask = cv2.warpPerspective(mask, mat, (width, height), flags=cv2.INTER_NEAREST,  # cv2.INTER_LINEAR
+                                   borderMode=borderMode, borderValue=(
+            0, 0, 0,))  # cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
+        #         mask  = (mask>0.5).astype(np.float32)
+
+        return image, mask
+
+
+class RandomShiftScaleCropPad(object):
+    def __init__(self, limit=0.2):
+        self.limit = limit
+
+    def _do_shift_scale_crop(self, image, mask, x0, y0, x1, y1):
+        height, width = image.shape[:2]
+        image = image[y0:y1, x0:x1]
+        mask = mask[y0:y1, x0:x1]
+
+        image = cv2.resize(image, dsize=(width, height))
+        mask = cv2.resize(mask, dsize=(width, height), interpolation=cv2.INTER_NEAREST)
+        #         mask  = (mask>0.5).astype(np.float32)
+        return image, mask
+
+    def __call__(self, image, mask):
+        if np.random.randint(2):
+            return image, mask
+
+        H, W = image.shape[:2]
+
+        dy = int(H * self.limit)
+        y0 = np.random.randint(0, dy)
+        y1 = H - np.random.randint(0, dy)
+
+        dx = int(W * self.limit)
+        x0 = np.random.randint(0, dx)
+        x1 = W - np.random.randint(0, dx)
+        image, mask = self._do_shift_scale_crop(image, mask, x0, y0, x1, y1)
+        return image, mask
+
+
+class ShiftScaleRotate(object):
+    def __init__(self, scale=1, angle_max=15, dx=0, dy=0):
+        self.scale = scale
+        self.angle_max = angle_max
+        self.dx = dx
+        self.dy = dy
+
+    def __call__(self, image, mask):
+        if np.random.randint(2):
+            return image, mask
+
+        borderMode = cv2.BORDER_REFLECT_101
+        # cv2.BORDER_REFLECT_101  cv2.BORDER_CONSTANT
+
+        height, width = image.shape[:2]
+        sx = self.scale
+        sy = self.scale
+        angle = np.random.uniform(0, self.angle_max)
+        cc = math.cos(angle / 180 * math.pi) * (sx)
+        ss = math.sin(angle / 180 * math.pi) * (sy)
+        rotate_matrix = np.array([[cc, -ss], [ss, cc]])
+
+        box0 = np.array([[0, 0], [width, 0], [width, height], [0, height], ], np.float32)
+        box1 = box0 - np.array([width / 2, height / 2])
+        box1 = np.dot(box1, rotate_matrix.T) + np.array([width / 2 + self.dx, height / 2 + self.dy])
+
+        box0 = box0.astype(np.float32)
+        box1 = box1.astype(np.float32)
+        mat = cv2.getPerspectiveTransform(box0, box1)
+
+        image = cv2.warpPerspective(image, mat, (width, height), flags=cv2.INTER_LINEAR,
+                                    borderMode=borderMode, borderValue=(
+            0, 0, 0,))  # cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
+        mask = cv2.warpPerspective(mask, mat, (width, height), flags=cv2.INTER_NEAREST,  # cv2.INTER_LINEAR
+                                   borderMode=borderMode, borderValue=(
+            0, 0, 0,))  # cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
+        #         mask  = (mask>0.5).astype(np.float32)
+        return image, mask
+
+
+class Elastic(object):
+    def __init__(self, grid=10, distort=0.15):
+        self.grid = grid
+        self.distort = distort
+
+    def __call__(self, image, mask):
+        if np.random.randint(2):
+            return image, mask
+
+        borderMode = cv2.BORDER_REFLECT_101
+        height, width = image.shape[:2]
+
+        x_step = int(self.grid)
+        xx = np.zeros(width, np.float32)
+        prev = 0
+        for x in range(0, width, x_step):
+            start = x
+            end = x + x_step
+            if end > width:
+                end = width
+                cur = width
+            else:
+                cur = prev + x_step * (1 + np.random.uniform(-self.distort, self.distort))
+
+            xx[start:end] = np.linspace(prev, cur, end - start)
+            prev = cur
+
+        y_step = int(self.grid)
+        yy = np.zeros(height, np.float32)
+        prev = 0
+        for y in range(0, height, y_step):
+            start = y
+            end = y + y_step
+            if end > height:
+                end = height
+                cur = height
+            else:
+                cur = prev + y_step * (1 + np.random.uniform(-self.distort, self.distort))
+
+            yy[start:end] = np.linspace(prev, cur, end - start)
+            prev = cur
+
+        # grid
+        map_x, map_y = np.meshgrid(xx, yy)
+        map_x = map_x.astype(np.float32)
+        map_y = map_y.astype(np.float32)
+
+        # image = map_coordinates(image, coords, order=1, mode='reflect').reshape(shape)
+        image = cv2.remap(image, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=borderMode,
+                          borderValue=(0, 0, 0,))
+
+        mask = cv2.remap(mask, map_x, map_y, interpolation=cv2.INTER_NEAREST, borderMode=borderMode,
+                         borderValue=(0, 0, 0,))
+        #         mask  = (mask>0.5).astype(np.float32)
+        return image, mask
+
+
+class CenterPadding(object):
+    def __init__(self, factor=32):
+        self.factor = factor
+
+    def _compute_center_pad(self, H, W, factor=32):
+        if H % factor == 0:
+            dy0, dy1 = 0, 0
+        else:
+            dy = factor - H % factor
+            dy0 = dy // 2
+            dy1 = dy - dy0
+
+        if W % factor == 0:
+            dx0, dx1 = 0, 0
+        else:
+            dx = factor - W % factor
+            dx0 = dx // 2
+            dx1 = dx - dx0
+        return dy0, dy1, dx0, dx1
+
+    def __call__(self, image, mask=None):
+        H, W = image.shape[:2]
+        dy0, dy1, dx0, dx1 = self._compute_center_pad(H, W, self.factor)
+
+        image = cv2.copyMakeBorder(image, dy0, dy1, dx0, dx1, cv2.BORDER_REFLECT_101)
+        # cv2.BORDER_CONSTANT, 0)
+        if mask is not None:
+            mask = cv2.copyMakeBorder(mask, dy0, dy1, dx0, dx1, cv2.BORDER_REFLECT_101)
+        return image, mask
+
+
+class HengAugmentation(object):
+    def __init__(self, mean, crop_limit=0.2, shear_high=0.07, scale=1, angle=15,elastic_grid=10, elastic_distort=0.15, size=202, factor=32):
+        self.horizontal_flip = RandomHorizontalFlip()
+        self.deformation = [
+            RandomShiftScaleCropPad(crop_limit),
+            HorizontalShear(-shear_high, shear_high),
+            ShiftScaleRotate(scale, angle),
+            Elastic(elastic_grid, elastic_distort),
+        ]
+        self.bright_contrast = [
+            RandomBrightness(25),
+            RandomContrast(0.92, 1.08),
+            RandomGamma(0.08),
+        ]
+        self.base_transofrm=Compose([
+            Resize(size),
+            CenterPadding(factor),
+            NormalizeMean(mean),
+        ])
+
+    def __call__(self, image, mask):
+        image, mask = self.horizontal_flip(image, mask)
+        c = np.random.choice(4)
+        image, mask = self.deformation[c](image, mask)
+        c = np.random.choice(3)
+        image, mask = self.bright_contrast[c](image, mask)
+        image, mask = self.base_transofrm(image, mask)
+        return image, mask
+
+
+class HengBaseTransform(object):
+    def __init__(self,  mean, size=202, factor=32):
+        self.base_transofrm = Compose([
+            Resize(size),
+            CenterPadding(factor),
+            NormalizeMean(mean),
+        ])
+
+    def __call__(self, image, mask=None):
+        return self.base_transofrm(image, mask)
 
 
 class Augmentation(object):

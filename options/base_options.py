@@ -50,6 +50,7 @@ class SegOptions(object):
                             help='whether use multiple GPUs',
                             action='store_true')
         self.parser.add_argument('--lr_policy', default='poly', type=str, choices=['poly', 'step'])
+        self.parser.add_argument('--aug', default='default', type=str, choices=['default', 'heng'])
 
         # fixed args
         self.parser.add_argument('--num_classes', default=2, type=int, help='# lesion + bg')

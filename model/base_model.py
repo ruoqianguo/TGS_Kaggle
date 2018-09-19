@@ -189,7 +189,7 @@ class BaseModel:
                     i_parts = i.split('.')
                     # print i_parts
                     if (not i_parts[0] == 'layer5') and (not i_parts[0] == 'decoder'):
-                    # if (not (i_parts[0] == 'layer5')) or (not (i_parts[0] == 'layer4')):
+                    # if not i_parts[0] == 'layer5':
                         new_params[i] = saved_state_dict[i]
                 self.net.load_state_dict(new_params)
 
@@ -323,13 +323,14 @@ class BaseModel:
             # pred.extend(out.data.cpu().numpy())
             true.extend(label_image.data.cpu().numpy())
         # pred_all = np.argmax(np.array(pred), 1)
-        pred_all = np.array(predict) > 0.5
-        true_all = np.array(true).astype(np.int)
-        # new_iou = intersection_over_union(true_all, pred_all)
-        # new_iou_t = intersection_over_union_thresholds(true_all, pred_all)
-        mean_iou, iou_t = mIoU(true_all, pred_all)
-
-        print('mean IoU : {:.4f}, IoU threshold : {:.4f}'.format(mean_iou, iou_t))
+        for t in np.arange(0.3, 0.6, 0.01):
+            pred_all = np.array(predict) > t
+            true_all = np.array(true).astype(np.int)
+            # new_iou = intersection_over_union(true_all, pred_all)
+            # new_iou_t = intersection_over_union_thresholds(true_all, pred_all)
+            mean_iou, iou_t = mIoU(true_all, pred_all)
+            print('threshold : {:.4f}'.format(t))
+            print('mean IoU : {:.4f}, IoU threshold : {:.4f}'.format(mean_iou, iou_t))
 
         return predict, true
 

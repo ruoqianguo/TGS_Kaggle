@@ -1,6 +1,7 @@
 import cv2
 import torch
 import numpy as np
+from functools import partial
 
 tta_config = ['origin', 'mirror']
 MEAN = [104.00698793, 116.66876762, 122.67891434]
@@ -22,13 +23,34 @@ def normalize(image):
     return image - MEAN
 
 
+def scale_img(img, scale):
+    h, w, _ = img.shape
+    img = cv2.resize(img, dsize=None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+    new_h, new_w, _ = img.shape
+    pad_top = (h - new_h) // 2
+    pad_bottom = h - pad_top - new_h
+    pad_left = (w - new_w) // 2
+    pad_right = w - pad_left - new_w
+    return cv2.copyMakeBorder(img, pad_top, pad_bottom, pad_left, pad_right, cv2.BORDER_REFLECT, value=0)
+
+
+def de_scale_img(score, scale):
+    h, w, _ = score.shape
+    top = (h - int(h * scale)) // 2
+    left = (w - int(w * scale)) // 2
+    old_score = score[top: top + int(h * scale), left: left + int(w * scale)]
+    return cv2.resize(old_score, (h, w), interpolation=cv2.INTER_LINEAR)
+
+
 ttas = {
     'origin': lambda img: img,
     'rot90': lambda img: cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE),
     'rot180': lambda img: cv2.rotate(img, cv2.ROTATE_180),
     'rot270': lambda img: cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE),
     'flip': lambda img: cv2.flip(img, 0),
-    'mirror': lambda img: cv2.flip(img, 1)
+    'mirror': lambda img: cv2.flip(img, 1),
+    'scale0.75': partial(scale_img, scale=0.75),
+    'scale0.5': partial(scale_img, scale=0.5),
 }
 
 
@@ -38,7 +60,9 @@ detta = {
     'rot180': lambda img: cv2.rotate(img, cv2.ROTATE_180),
     'rot270': lambda img: cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE),
     'flip': lambda img: cv2.flip(img, 0),
-    'mirror': lambda img: cv2.flip(img, 1)
+    'mirror': lambda img: cv2.flip(img, 1),
+    'scale0.75': partial(de_scale_img, scale=0.75),
+    'scale0.5': partial(de_scale_img, scale=0.5),
 }
 
 
