@@ -89,9 +89,20 @@ def get_10x_lr_params(model):
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr*((1-float(iter)/max_iter)**(power))
 
-def adjust_learning_rate(base_lr, optimizer, i_iter, total_iters, power):
+
+def cos_lr(base_lr, iter, max_iter, M):
+    cos_inner = np.pi * (iter % (max_iter // M))
+    cos_inner /= max_iter // M
+    cos_out = np.cos(cos_inner) + 1
+    return max(base_lr * 0.5 * cos_out, 1e-6)
+
+
+def adjust_learning_rate(base_lr, optimizer, i_iter, total_iters, power, cyclic_m, lr_policy):
     """Sets the learning rate to the initial LR divided by 5 at 60th, 120th and 160th epochs"""
-    lr = lr_poly(base_lr, i_iter, total_iters, power)
+    if lr_policy == 'poly':
+        lr = lr_poly(base_lr, i_iter, total_iters, power)
+    elif lr_policy == 'cyclic':
+        lr = cos_lr(base_lr, i_iter, total_iters, cyclic_m)
     optimizer.param_groups[0]['lr'] = lr
     optimizer.param_groups[1]['lr'] = lr * 10
 
@@ -145,7 +156,11 @@ class BaseModel:
         self.lr_current = args.lr
         self.cuda = args.cuda
         self.phase = args.phase
-        self.lr_poly = (args.lr_policy == 'poly')
+        self.lr_policy = args.lr_policy
+        self.cyclic_m = args.cyclic_m
+        if self.lr_policy == 'cyclic':
+            print('using cyclic')
+            assert self.iterations % self.cyclic_m == 0
         if args.loss == 'CELoss':
             self.criterion = nn.CrossEntropyLoss(size_average=True)
         elif args.loss == 'DiceLoss':
@@ -325,7 +340,7 @@ class BaseModel:
             # pred.extend(out.data.cpu().numpy())
             true.extend(label_image.data.cpu().numpy())
         # pred_all = np.argmax(np.array(pred), 1)
-        for t in np.arange(0.25, 0.55, 0.01):
+        for t in np.arange(0.25, 0.53, 0.01):
             pred_all = np.array(predict) > t
             true_all = np.array(true).astype(np.int)
             # new_iou = intersection_over_union(true_all, pred_all)
@@ -345,8 +360,9 @@ class BaseModel:
             flag = 'val'
         t2 = time.time()
         for image, mask in dataloader:
-            if train and self.lr_poly:
-                adjust_learning_rate(self.args.lr, self.optimizer, self.iters, self.iterations * len(dataloader), 0.9)
+            if train and self.lr_policy != 'step':
+                adjust_learning_rate(self.args.lr, self.optimizer, self.iters, self.iterations * len(dataloader), 0.9,
+                                     self.cyclic_m, self.lr_policy)
                 self.iters += 1
 
             if self.cuda:
@@ -426,6 +442,10 @@ class BaseModel:
             names = ['mIoU', 'mIoU_threshold', ]
             write_scalars(writer, scalars, names, epoch, tag=flag + '_IoU')
 
+            scalars = [self.optimizer.param_groups[0]['lr'], ]
+            names = ['learning_rate', ]
+            write_scalars(writer, scalars, names, epoch, tag=flag + '_lr')
+
             print(
                 '{} loss: {:.4f} | acc: {:.4f} | mIoU: {:.4f} | mIoU_threshold: {:.4f} |  n_iter: {} |  learning_rate: {} | time: {:.2f}'.format(flag, loss,
                                     all_acc, mean_iou, iou_t, epoch, self.optimizer.param_groups[0]['lr'], time.time() - t2))
@@ -451,15 +471,18 @@ class BaseModel:
                 self.best_val = iou_t
                 self.count = 0
 
-            if (not train) and (self.best_val - iou_t > 0.003) and (self.count < 10) and (not self.lr_poly):
+            if (not train) and (self.best_val - iou_t > 0.003) and (self.count < 10) and (self.lr_policy == 'step'):
                 self.count += 1
-            if (not train) and (self.count >= 10) and (not self.lr_poly):
+            if (not train) and (self.count >= 10) and (self.lr_policy == 'step'):
                 self._adjust_learning_rate(epoch)
                 self.count = 0
 
     def train_val(self, dataloader_train, dataloader_val, writer):
         val_epoch = 0
         for epoch in range(self.iterations):
+            if (self.lr_policy == 'cyclic') and (epoch % int(self.iterations / self.cyclic_m) == 0):
+                print('-------start cycle {}------------'.format(epoch // int(self.iterations / self.cyclic_m)))
+                self.best_val = 0.0
             self.run_epoch(dataloader_train, writer, epoch, train=True, metrics=True)
             self.run_epoch(dataloader_val, writer, val_epoch, train=False, metrics=True)
             val_epoch += 1

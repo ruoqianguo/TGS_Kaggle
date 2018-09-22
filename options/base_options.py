@@ -44,13 +44,19 @@ class SegOptions(object):
         self.parser.add_argument('--vis', help='whether vis', action='store_true')
         self.parser.add_argument('--use_depth', help='whether use depth', action='store_true')
         self.parser.add_argument('--ms', '--multi_scale', help='whether use multi scale', action='store_true')
-        self.parser.add_argument('--ms_scales', default=[0.75, 1.0, 1.25], nargs='+', type=float, help='ms scale')
+        self.parser.add_argument('--ms_scales', default=[1.0, 1.25], nargs='+', type=float, help='ms scale')
         self.parser.add_argument('--out_stride', default=16, type=int, help='out stride')
         self.parser.add_argument('--mGPUs', dest='mGPUs',
                             help='whether use multiple GPUs',
                             action='store_true')
-        self.parser.add_argument('--lr_policy', default='poly', type=str, choices=['poly', 'step'])
+        self.parser.add_argument('--lr_policy', default='poly', type=str, choices=['poly', 'step', 'cyclic'])
         self.parser.add_argument('--aug', default='default', type=str, choices=['default', 'heng'])
+        self.parser.add_argument('--cyclic_m', help='how many cycles to split', type=int, default=5)
+        self.parser.add_argument('--ensemble_exp', default=None, nargs='+', type=str, help='ensemble exp name')
+        self.parser.add_argument('--ensemble_model', default=None, nargs='+', type=str, help='ensemble model name')
+        self.parser.add_argument('--ensemble_snapshot', default=None, nargs='+', type=str, help='ensemble snapshot name')
+        self.parser.add_argument('--ensemble_tta', default=None, nargs='+', type=str2bool, help='ensemble snapshot name')
+        self.parser.add_argument('--ensemble_ms', default=None, nargs='+', type=str2bool, help='ensemble snapshot name')
 
         # fixed args
         self.parser.add_argument('--num_classes', default=2, type=int, help='# lesion + bg')
