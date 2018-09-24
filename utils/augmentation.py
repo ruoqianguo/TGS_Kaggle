@@ -126,7 +126,7 @@ class Padding(object):
         int(left):int(left + width)] = image
         image = expand_image
         if mask is not None:
-            expand_mask = np.zeros((int(height * ratio), int(width * ratio)), dtype=mask.dtype)
+            expand_mask = np.zeros((int(height * ratio), int(width * ratio)), dtype=np.float32)
             expand_mask[:, :] = 0
             expand_mask[int(top):int(top + height),
             int(left):int(left + width)] = mask
@@ -202,20 +202,26 @@ class RandomResizedCrop(object):
 
     def __call__(self, image, mask=None):
         if np.random.randint(2):
-            h, w, _ = image.shape
-            if (h == self.size) and (w == self.size):
-                return image, mask
-            else:
+            for t in range(50):
+                i, j, h, w = self.get_params(image, self.scale, self.ratio)
+                cropped = image[i:i + h, j:j + w, :]
                 if mask is not None:
-                    mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
-                return cv2.resize(image, self.size), mask
+                    crop_mask = mask[i:i + h, j:j + w]
+                    if np.all(crop_mask == -255):
+                        continue
+                    mask = cv2.resize(crop_mask, self.size, interpolation=cv2.INTER_NEAREST)
+                    break
+                else:
+                    break
+            return cv2.resize(cropped, self.size), mask
 
-        i, j, h, w = self.get_params(image, self.scale, self.ratio)
-        cropped = image[i:i + h, j:j + w, :]
-        if mask is not None:
-            crop_mask = mask[i:i+h, j:j+w]
-            mask = cv2.resize(crop_mask, self.size, interpolation=cv2.INTER_NEAREST)
-        return cv2.resize(cropped, self.size), mask
+        h, w, _ = image.shape
+        if (h == self.size) and (w == self.size):
+            return image, mask
+        else:
+            if mask is not None:
+                mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
+            return cv2.resize(image, self.size), mask
 
 
 class RandomContrast(object):

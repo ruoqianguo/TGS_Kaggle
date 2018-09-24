@@ -95,10 +95,11 @@ def intersection_over_union_thresholds(y_true, y_pred):
 
 min_object_size = 1
 
-def accuracy(true, pred):
-    return np.mean(true == pred)
+def accuracy(true, pred, ignore=-1):
+    valid = (true != ignore)
+    return np.mean(true[valid] == pred[valid])
 
-def mIoU(true, pred):
+def mIoU(true, pred, ignore=-1):
     """
     :param true: shape (bs, 128, 128), dtype:0,1
     :param pred: shape (bs, 128, 128),
@@ -108,6 +109,9 @@ def mIoU(true, pred):
     smooth = 1e-6
     true = true.reshape(bs, -1)
     pred = pred.reshape(bs, -1)
+    valid = (true != ignore)
+    true = true * valid
+    pred = pred * valid
     intersections = np.sum(true * pred, 1)
     union = np.sum(true, 1) + np.sum(pred, 1) - intersections
     iou = (intersections + smooth) / (union + smooth)

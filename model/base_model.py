@@ -340,7 +340,7 @@ class BaseModel:
             # pred.extend(out.data.cpu().numpy())
             true.extend(label_image.data.cpu().numpy())
         # pred_all = np.argmax(np.array(pred), 1)
-        for t in np.arange(0.25, 0.53, 0.01):
+        for t in np.arange(0.05, 0.51, 0.01):
             pred_all = np.array(predict) > t
             true_all = np.array(true).astype(np.int)
             # new_iou = intersection_over_union(true_all, pred_all)

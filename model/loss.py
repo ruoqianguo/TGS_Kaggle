@@ -63,7 +63,7 @@ class LovaszSoftmax(nn.Module):
         :return:
         """
         pred = F.softmax(pred, dim=1)
-        return self.lovasz_softmax(pred, label, per_image=self.per_image)
+        return self.lovasz_softmax(pred, label, per_image=self.per_image, ignore=-1)
 
 
 class FocalLoss(nn.Module):

@@ -87,7 +87,7 @@ if __name__ == '__main__':
     all_true = true
     all_pred /= len(args.ensemble_exp)
     print('ensemble results')
-    for t in np.arange(0.25, 0.55, 0.01):
+    for t in np.arange(0.05, 0.55, 0.01):
         pred_all = all_pred > t
         true_all = all_true.astype(np.int)
         # new_iou = intersection_over_union(true_all, pred_all)
