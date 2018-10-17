@@ -71,7 +71,7 @@ if __name__ == '__main__':
     preds_test /= len(args.ensemble_exp)
     # generate csv
     print('generate csv ...')
-    for t in [0.23, 0.24]:
+    for t in [0.29, 0.30, 0.31, 0.32, 0.33, 0.4, 0.45]:
         make_submission((preds_test > t).astype(np.uint8), test['names'],
                         path='{}_{:.2f}_submission.csv'.format(csv_name, t))
     print('generate {}_submission.csv'.format(args.exp_name))

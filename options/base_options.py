@@ -57,6 +57,8 @@ class SegOptions(object):
         self.parser.add_argument('--ensemble_snapshot', default=None, nargs='+', type=str, help='ensemble snapshot name')
         self.parser.add_argument('--ensemble_tta', default=None, nargs='+', type=str2bool, help='ensemble snapshot name')
         self.parser.add_argument('--ensemble_ms', default=None, nargs='+', type=str2bool, help='ensemble snapshot name')
+        self.parser.add_argument('--fold_index', default=0, type=int, help='Stratified K-Folds cross-validator # number')
+        self.parser.add_argument('--total_fold', default=5, type=int, help='Stratified K-Folds cross-validator # total number')
 
         # fixed args
         self.parser.add_argument('--num_classes', default=2, type=int, help='# lesion + bg')

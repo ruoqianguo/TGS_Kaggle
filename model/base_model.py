@@ -94,7 +94,7 @@ def cos_lr(base_lr, iter, max_iter, M):
     cos_inner = np.pi * (iter % (max_iter // M))
     cos_inner /= max_iter // M
     cos_out = np.cos(cos_inner) + 1
-    return max(base_lr * 0.5 * cos_out, 1e-6)
+    return max(base_lr * 0.5 * cos_out, 4e-5)
 
 
 def adjust_learning_rate(base_lr, optimizer, i_iter, total_iters, power, cyclic_m, lr_policy):
@@ -170,7 +170,7 @@ class BaseModel:
         elif args.loss == 'LovaszLoss':
             self.criterion = LovaszSoftmax(per_image=args.loss_per_img)
         elif args.loss == 'FocalLoss':
-            self.criterion = FocalLoss(args.num_classes, 0.25, 2)
+            self.criterion = FocalLoss(args.num_classes, alpha=None, gamma=2)
         else:
             raise RuntimeError('must define loss')
 

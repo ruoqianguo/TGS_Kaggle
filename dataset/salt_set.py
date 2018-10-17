@@ -9,6 +9,14 @@ depth_std = 55.4674
 depth_max = 959.0
 
 
+def add_depth_channels(image_np):
+    h, w, _ = image_np.shape
+    for row, const in enumerate(np.linspace(0, 1, h)):
+        image_np[row, :, 1] = const
+    image_np[:, :, 2] = image_np[:, :, 0] * image_np[:, :, 1]
+    return image_np
+
+
 class SaltSet(data.Dataset):
     def __init__(self, data_label, image_root, augmentation, use_depth=False, original_mask=False):
         self.data_label = data_label
@@ -21,6 +29,7 @@ class SaltSet(data.Dataset):
         img = self.data_label['images'][item]
         mask = self.data_label['masks'][item]
         img = np.tile(img[:, :, np.newaxis], (1, 1, 3))
+        # img = add_depth_channels(img)
         if self.original_mask:
             img, _ = self.augmentation(img.astype(np.float32).copy(), None)
         else:

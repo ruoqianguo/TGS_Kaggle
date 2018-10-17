@@ -23,7 +23,11 @@ if __name__ == '__main__':
 
     MEAN = [104.00698793, 116.66876762, 122.67891434]
 
-    val = pickle.load(open(os.path.join(args.data_root, 'val.pkl'), 'rb'))
+    save_name = '{}_{}.pkl'
+    val = pickle.load(
+        open(os.path.join(args.data_root, 'kfold{}/'.format(args.total_fold), save_name.format('val', args.fold_index)),
+             'rb'))
+    print(val['names'][0:5], 'val', 'using {}/{} fold'.format(args.fold_index, args.total_fold))
     image_root = os.path.join(args.data_root, 'train', 'images')
 
     if args.aug == 'heng':
